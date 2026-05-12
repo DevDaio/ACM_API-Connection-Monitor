@@ -1,2 +1,47 @@
-.obsidian
-.gitignore
+# === OS files ===
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.*.swp
+
+# === IDE / Editor ===
+.obsidian/
+.vscode/
+.idea/
+*.iml
+
+# === Rust / Cargo ===
+Backend/API/target/
+
+# === Node.js / JavaScript ===
+node_modules/
+
+# === Environment / Secrets ===
+.env
+.env.local
+.env.*.local
+*.secret
+secrets/
+
+# === Python ===
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+*.egg
+.venv/
+venv/
+
+# === Build output ===
+dist/
+build/
+*.tsbuildinfo
+
+# === Logs ===
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
