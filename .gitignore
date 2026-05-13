@@ -40,6 +40,10 @@ dist/
 build/
 *.tsbuildinfo
 
+# === Docker / DB volumes ===
+DB/data/
+DB/pgadmin/
+
 # === Logs ===
 *.log
 npm-debug.log*
