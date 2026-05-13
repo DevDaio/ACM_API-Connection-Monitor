@@ -10,4 +10,4 @@ Simple Endpoint-Status-Monitoring Web-App
 Creator: T.Adickes 
 Github: [DevDaio](https://github.com/DevDaio/)
 
-![Konzept-Skizze](Excalidraw/Konzept-Skizze.png)
+![Konzept-Skizze](Excalidraw/Konzept-Skizze.png?v=2)
