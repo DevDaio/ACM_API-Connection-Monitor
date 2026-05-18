@@ -1,12 +1,12 @@
 CREATE TABLE IF NOT EXISTS "user" (
-    userid INTEGER PRIMARY KEY,
-    emailaddress VARCHAR(100) NOT NULL UNIQUE,
+    userid INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    emailadress VARCHAR(100) NOT NULL UNIQUE,
     password VARCHAR(100) NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS endpoint (
-    endpointid INTEGER PRIMARY KEY,
-    url VARCHAR(300) NOT NULL UNIQUE
+    endpointid INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    url VARCHAR(300) NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS userendpoint (
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS userendpoint (
 CREATE TABLE IF NOT EXISTS intervall (
     endpointid INTEGER PRIMARY KEY,
     seconds INTEGER NOT NULL,
-    FOREIGN KEY (endpointid) REFERENCES endpoint(endpointid)
+    FOREIGN KEY (endpointid) REFERENCES endpoint(endpointid) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS log (
@@ -28,5 +28,5 @@ CREATE TABLE IF NOT EXISTS log (
     status BOOLEAN NOT NULL,
     statusdate DATE NOT NULL DEFAULT CURRENT_DATE,
     statustime TIME NOT NULL DEFAULT CURRENT_TIME,
-    FOREIGN KEY (endpointid) REFERENCES endpoint(endpointid)
+    FOREIGN KEY (endpointid) REFERENCES endpoint(endpointid) ON DELETE CASCADE
 );
