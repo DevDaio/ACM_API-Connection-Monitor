@@ -12,12 +12,12 @@ kanban-plugin: board
 
 ## In Bearbeitung
 
-- [ ] IPs pingbar machen
 
 
 ## Tested
 
-kannst 
+- [ ] IPs pingbar machen
+
 
 ## Complete
 
