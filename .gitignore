@@ -15,8 +15,15 @@ Thumbs.db
 # === Rust / Cargo ===
 Backend/API/target/
 
-# === Node.js / JavaScript ===
+# === Node.js ===
 node_modules/
+Frontend/ACM_Frontend/node_modules/.vite/
+Frontend/ACM_Frontend/node_modules/.vite-temp/
+
+# === Build output ===
+dist/
+build/
+*.tsbuildinfo
 
 # === Environment / Secrets ===
 .env
@@ -24,21 +31,6 @@ node_modules/
 .env.*.local
 *.secret
 secrets/
-
-# === Python ===
-__pycache__/
-*.pyc
-*.pyo
-*.egg-info/
-dist/
-*.egg
-.venv/
-venv/
-
-# === Build output ===
-dist/
-build/
-*.tsbuildinfo
 
 # === Docker / DB volumes ===
 DB/data/
@@ -49,3 +41,6 @@ DB/pgadmin/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# === Temp / Cache ===
+*.tmp

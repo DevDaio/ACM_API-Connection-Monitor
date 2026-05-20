@@ -1,5 +1,57 @@
+/* ═══════════════════════════════════════════════════════
+ * 📦 Server-Einstiegspunkt + Router + Handler
+ *
+ * 🎯 ZWECK:
+ * Startet den HTTP-Server, definiert alle API-Routen
+ * und verbindet Handler mit Datenbank-Queries.
+ *
+ * 📥 INPUT:
+ * - DATABASE_URL aus Umgebungsvariable oder Default
+ *
+ * 📤 OUTPUT:
+ * - HTTP-Server auf Port 3000
+ * - 13 API-Endpoints unter /acm/*
+ *
+ * 🔗 DEPENDENCIES:
+ * - axum: Routing + Handler
+ * - tokio: Async-Runtime
+ * - serde/serde_json: JSON (De)Serialization
+ * - tower-http: CORS
+ * - bcrypt: Passwort-Hashing
+ * - service_modules::async_services: DB-Queries
+ * - dotenv: .env-Datei laden
+ *
+ * 💡 KONZEPTE:
+ * - Shared State mit Arc<AppState>
+ * - axum Extractor (State, Query, Json)
+ * - CORS Middleware
+ * - tokio::spawn für Background-Tasks
+ *
+ * ⚠️ WICHTIG ZU WISSEN:
+ * - CORS erlaubt EVERY Origin (nur für Dev!)
+ * - Fehler werden als (StatusCode, Json<ErrorRes>) getypt
+ *
+ * 🎓 LERN-TIPP:
+ * Lies erst die Router-Definition (main()), dann
+ * einzelne Handler. Jeder Handler folgt dem selben
+ * Pattern: State + Parameter → async_services → Response
+ * ═══════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════
+ * 📦 MODUL-DEKORATION
+ * Macht das service_modules-Verzeichnis verfügbar.
+ * ═══════════════════════════════════════════════════════ */
 mod service_modules;
 
+/* ═══════════════════════════════════════════════════════
+ * 📦 IMPORTS
+ * axum: Router, Extractor, Handler-Factory
+ * serde: Request/Response-Typen
+ * service_modules::async_services: DB-Zugriff
+ * sqlx::PgPool: Datenbank-Pool
+ * std::sync::Arc: Thread-sicherer Shared State
+ * tower_http::cors: CORS-Header
+ * ═══════════════════════════════════════════════════════ */
 use axum::{
     extract::Query,
     http::Method,
@@ -12,12 +64,21 @@ use sqlx::PgPool;
 use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
 
+/* ═══════════════════════════════════════════════════════
+ * 📦 APP-STATE
+ * Ein Struct, das den globalen Anwendungszustand hält.
+ * Hier: Nur der PostgreSQL-Connection-Pool.
+ * Wird per Arc<AppState> an alle Handler verteilt.
+ * ═══════════════════════════════════════════════════════ */
 struct AppState {
     pool: PgPool,
 }
 
-// --- Request / Response types ---
-
+/* ═══════════════════════════════════════════════════════
+ * 📦 REQUEST-TYPEN
+ * Jeder API-Endpoint bekommt einen eigenen Deserialize-
+ * Struct. Die Feldnamen entsprechen den JSON-Keys.
+ * ═══════════════════════════════════════════════════════ */
 #[derive(Deserialize)]
 struct CreateAccountReq {
     email: String,
@@ -71,11 +132,20 @@ struct UpdateEndpointReq {
     url: String,
 }
 
+/* ═══════════════════════════════════════════════════════
+ * 📦 QUERY-PARAMETER
+ * Für GET-Endpoints, die ?id=N erwarten.
+ * ═══════════════════════════════════════════════════════ */
 #[derive(Deserialize)]
 struct IdParam {
     id: i32,
 }
 
+/* ═══════════════════════════════════════════════════════
+ * 📦 RESPONSE-TYPEN
+ * LoginRes: Erfolgreicher Login/Registrierung
+ * ErrorRes: Einheitliches Error-Format
+ * ═══════════════════════════════════════════════════════ */
 #[derive(Serialize)]
 struct LoginRes {
     userid: i32,
@@ -87,12 +157,25 @@ struct ErrorRes {
     error: String,
 }
 
-// --- Handlers ---
-
+/* ═══════════════════════════════════════════════════════
+ * 📦 HANDLER: HEALTHCHECK
+ * GET /acm → {"status": "ok", "message": "..."}
+ * Einfachster Handler: kein State, kein Parameter.
+ * ═══════════════════════════════════════════════════════ */
 async fn handle_healthcheck() -> Json<serde_json::Value> {
     Json(serde_json::json!({ "status": "ok", "message": "ACM API Connection Monitor" }))
 }
 
+/* ═══════════════════════════════════════════════════════
+ * 📦 HANDLER: CREATE ACCOUNT
+ * POST /acm/createAccount
+ * 1. Prüfen, ob Email bereits existiert
+ * 2. Passwort mit bcrypt hashen
+ * 3. User in DB anlegen
+ * 4. userid + email zurückgeben
+ *
+ * 💡 LERN-TIPP: Pattern "prüfen → verarbeiten → antworten"
+ * ═══════════════════════════════════════════════════════ */
 async fn handle_create_account(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(body): Json<CreateAccountReq>,
@@ -137,6 +220,17 @@ async fn handle_create_account(
     }))
 }
 
+/* ═══════════════════════════════════════════════════════
+ * 📦 HANDLER: LOGIN
+ * POST /acm/login
+ * 1. User per Email finden
+ * 2. Passwort mit bcrypt verifizieren
+ * 3. userid + email zurückgeben
+ *
+ * ⚠️ WICHTIG: Gleiche Fehlermeldung bei "User nicht
+ * gefunden" und "Passwort falsch" – verhindert
+ * Enumeration gültiger Emails.
+ * ═══════════════════════════════════════════════════════ */
 async fn handle_login(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(body): Json<LoginReq>,
@@ -178,6 +272,12 @@ async fn handle_login(
     }))
 }
 
+/* ═══════════════════════════════════════════════════════
+ * 📦 HANDLER: HOME (Endpoint-Liste)
+ * GET /acm/home?id=N
+ * Gibt alle Endpoints eines Users mit aktuellem Status,
+ * Uptime-Dauer, Intervall und Status-Historie zurück.
+ * ═══════════════════════════════════════════════════════ */
 async fn handle_home(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Query(params): Query<IdParam>,
@@ -193,6 +293,10 @@ async fn handle_home(
     Ok(Json(endpoints))
 }
 
+/* ═══════════════════════════════════════════════════════
+ * 📦 HANDLER: USER (Daten abrufen)
+ * GET /acm/user?id=N
+ * ═══════════════════════════════════════════════════════ */
 async fn handle_user(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Query(params): Query<IdParam>,
@@ -208,6 +312,11 @@ async fn handle_user(
     Ok(Json(user))
 }
 
+/* ═══════════════════════════════════════════════════════
+ * 📦 HANDLER: CHANGE PASSWORD
+ * PUT /acm/user/changePassword
+ * Alt → Neu: Verifiziert altes Passwort, hasht neues.
+ * ═══════════════════════════════════════════════════════ */
 async fn handle_change_password(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(body): Json<ChangePasswordReq>,
@@ -256,6 +365,10 @@ async fn handle_change_password(
     Ok(Json(serde_json::json!({ "status": "ok" })))
 }
 
+/* ═══════════════════════════════════════════════════════
+ * 📦 HANDLER: CHANGE EMAIL
+ * PUT /acm/user/changeEmail
+ * ═══════════════════════════════════════════════════════ */
 async fn handle_change_email(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(body): Json<ChangeEmailReq>,
@@ -271,6 +384,11 @@ async fn handle_change_email(
     Ok(Json(serde_json::json!({ "status": "ok" })))
 }
 
+/* ═══════════════════════════════════════════════════════
+ * 📦 HANDLER: DELETE ACCOUNT
+ * DELETE /acm/user/deleteAccount
+ * Löscht User + alle verknüpften Daten (CASCADE).
+ * ═══════════════════════════════════════════════════════ */
 async fn handle_delete_account(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(body): Json<DeleteAccountReq>,
@@ -286,6 +404,11 @@ async fn handle_delete_account(
     Ok(Json(serde_json::json!({ "status": "ok" })))
 }
 
+/* ═══════════════════════════════════════════════════════
+ * 📦 HANDLER: ADD ENDPOINT
+ * PUT /acm/addEndpoint
+ * Legt neuen Endpoint an, verknüpft ihn mit User.
+ * ═══════════════════════════════════════════════════════ */
 async fn handle_add_endpoint(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(body): Json<AddEndpointReq>,
@@ -301,6 +424,11 @@ async fn handle_add_endpoint(
     Ok(Json(serde_json::json!({ "endpointid": endpointid })))
 }
 
+/* ═══════════════════════════════════════════════════════
+ * 📦 HANDLER: SET INTERVALL
+ * PUT /acm/setIntervall
+ * Setzt/aktualisiert Prüfintervall (Upsert).
+ * ═══════════════════════════════════════════════════════ */
 async fn handle_set_intervall(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(body): Json<SetIntervallReq>,
@@ -316,6 +444,11 @@ async fn handle_set_intervall(
     Ok(Json(serde_json::json!({ "status": "ok" })))
 }
 
+/* ═══════════════════════════════════════════════════════
+ * 📦 HANDLER: DELETE ENDPOINT
+ * PUT /acm/deleteConfirm
+ * Löscht Endpoint + zugehörige Logs/Intervalle (manuell).
+ * ═══════════════════════════════════════════════════════ */
 async fn handle_delete_endpoint(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(body): Json<DeleteEndpointReq>,
@@ -331,6 +464,11 @@ async fn handle_delete_endpoint(
     Ok(Json(serde_json::json!({ "status": "ok" })))
 }
 
+/* ═══════════════════════════════════════════════════════
+ * 📦 HANDLER: LOG
+ * GET /acm/log?id=N
+ * Gibt alle Log-Einträge eines Endpoints zurück.
+ * ═══════════════════════════════════════════════════════ */
 async fn handle_log(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Query(params): Query<IdParam>,
@@ -346,6 +484,10 @@ async fn handle_log(
     Ok(Json(logs))
 }
 
+/* ═══════════════════════════════════════════════════════
+ * 📦 HANDLER: UPDATE ENDPOINT (URL ändern)
+ * PUT /acm/updateEndpoint
+ * ═══════════════════════════════════════════════════════ */
 async fn handle_update_endpoint(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(body): Json<UpdateEndpointReq>,
@@ -361,6 +503,20 @@ async fn handle_update_endpoint(
     Ok(Json(serde_json::json!({ "status": "ok" })))
 }
 
+/* ═══════════════════════════════════════════════════════
+ * 📦 MAIN-FUNKTION
+ * Der Einstiegspunkt der Anwendung.
+ *
+ * 1. .env laden (dotenv)
+ * 2. DATABASE_URL lesen (mit Fallback)
+ * 3. PostgreSQL-Pool erstellen
+ * 4. Monitoring-Loop in Background spawnen
+ * 5. Router mit CORS konfigurieren
+ * 6. Server auf Port 3000 starten
+ *
+ * 🎓 LERN-TIPP: Achte auf die Reihenfolge:
+ *    State → CORS → Router → Layer → Serve
+ * ═══════════════════════════════════════════════════════ */
 #[tokio::main]
 async fn main() -> Result<(), sqlx::Error> {
     dotenv::dotenv().ok();

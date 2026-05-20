@@ -1,0 +1,80 @@
+/* ═══════════════════════════════════════════════════════
+ * 📦 GLOBALE STYLES + THEME-SYSTEM
+ *
+ * 🎯 ZWECK:
+ * Definiert CSS-Variablen für drei Farbschemas und
+ * Utility-Klassen für das Spaceship-Cockpit-Design.
+ *
+ * 💡 KONZEPTE:
+ * - data-theme-Attribut-Selektor (:root[data-theme="..."])
+ * - CSS-Variablen (--color-orange-* werden umdefiniert)
+ * - Utility-Klassen (ac-tx, ac-bg, ac-bd)
+ * - Scanlines + Grid-Hintergrund (via CSS)
+ *
+ * 🎓 LERN-TIPP:
+ * Das Theme-System überschreibt Tailwinds --color-orange-*
+ * Variablen. So können wir Tailwind-Klassen wie
+ * "text-orange-600" themen-abhängig nutzen!
+ * ═══════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+
+:root[data-theme="lava"] {
+    --color-orange-400: #f97316;
+    --color-orange-500: #f97316;
+    --color-orange-600: #ea580c;
+    --color-orange-700: #c2410c;
+    --color-orange-950: #431407;
+    --accent-glow: rgba(234,88,12,0.25);
+    --accent-bd: rgba(234,88,12,0.25);
+    --accent-bg: #ea580c;
+}
+
+:root[data-theme="green"] {
+    --color-orange-400: #4ade80;
+    --color-orange-500: #22c55e;
+    --color-orange-600: #16a34a;
+    --color-orange-700: #15803d;
+    --color-orange-950: #052e16;
+    --accent-glow: rgba(22,163,74,0.25);
+    --accent-bd: rgba(22,163,74,0.25);
+    --accent-bg: #16a34a;
+}
+
+:root[data-theme="purple"] {
+    --color-orange-400: #a855f7;
+    --color-orange-500: #a855f7;
+    --color-orange-600: #7c3aed;
+    --color-orange-700: #6d28d9;
+    --color-orange-950: #2e1065;
+    --accent-glow: rgba(124,58,237,0.25);
+    --accent-bd: rgba(124,58,237,0.25);
+    --accent-bg: #7c3aed;
+}
+
+body {
+    margin: 0;
+    background: #030712;
+    font-family: 'Space Mono', monospace;
+    color: #e5e7eb;
+}
+
+#root { min-height: 100vh; }
+
+input.no-spinner::-webkit-inner-spin-button,
+input.no-spinner::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+input.no-spinner[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+[data-theme] .ac-tx { color: var(--color-orange-600); }
+[data-theme] .ac-tx-hover { color: var(--color-orange-500); }
+[data-theme] .ac-tx-hover:hover { color: var(--color-orange-500); }
+[data-theme] .ac-bg { background-color: var(--accent-bg); }
+[data-theme] .ac-bd { border-color: var(--accent-bd); box-shadow: 0 0 8px var(--accent-glow); }
+[data-theme] .ac-bd-hover:hover { border-color: var(--accent-bd); box-shadow: 0 0 12px var(--accent-glow); }
+[data-theme] .ac-ring:focus { --tw-ring-color: var(--color-orange-600); }
