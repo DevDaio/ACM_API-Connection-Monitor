@@ -8,9 +8,18 @@ import DeleteConfirmModal from './components/DeleteConfirmModal';
 import AccountSettingsModal from './components/AccountSettingsModal';
 import LogModal from './components/LogModal';
 import EditUrlModal from './components/EditUrlModal';
+
 import { ThemeProvider } from './ThemeContext';
 import { api } from './api';
 import './App.css';
+
+function normalizeUrl(raw) {
+  if (/^[a-zA-Z][a-zA-Z0-9+\-.]*:\/\//.test(raw)) return raw;
+  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(raw)) return `http://${raw}`;
+  if (/^\[[\da-fA-F:]+\](:\d+)?$/.test(raw)) return `http://${raw}`;
+  if (/^[\da-fA-F:]+$/.test(raw) && raw.includes(':')) return `http://[${raw}]`;
+  return `https://${raw}`;
+}
 
 function App() {
   const [user, setUser] = useState(() => {
@@ -118,7 +127,7 @@ function App() {
   }
 
   async function handleAddEndpoint(rawUrl, seconds) {
-    const url = rawUrl.match(/^[a-zA-Z][a-zA-Z0-9+\-.]*:\/\//) ? rawUrl : `https://${rawUrl}`;
+    const url = normalizeUrl(rawUrl);
     const data = await api.addEndpoint(user.userid, url);
     await api.setIntervall(data.endpointid, seconds);
     const fresh = await api.getHome(user.userid);
@@ -164,7 +173,7 @@ function App() {
 
   async function handleSaveUrl() {
     const ep = selectedEndpoint;
-    const url = editUrlValue.match(/^[a-zA-Z][a-zA-Z0-9+\-.]*:\/\//) ? editUrlValue : `https://${editUrlValue}`;
+    const url = normalizeUrl(editUrlValue);
     await api.updateEndpoint(ep.endpointid, url);
     setEndpoints(prev => prev.map(e => e.endpointid === ep.endpointid ? { ...e, url } : e));
   }
