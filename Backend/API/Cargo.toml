@@ -1,18 +1,30 @@
+# ─── Package-Metadaten ───
 [package]
 name = "Backend"
 version = "0.1.0"
 edition = "2021"
 
-
+# ─── Abhängigkeiten ───
 [dependencies]
+# axum: Async-Webframework (Router, Handler, Extractor)
 axum = { version = "0.8.9", features = ["macros"] }
+# tokio: Async-Runtime (full = alle Features: net, io, time, sync, ...)
 tokio = { version = "1.52.3", features = ["full"] }
+# serde + serde_json: Serialisierung/Deserialisierung von JSON
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.149" }
+# sqlx: Async-PostgreSQL-Client mit Connection-Pooling
+# runtime-tokio = async mit tokio, tls-native-tls = SSL, postgres = PG-Support, chrono = Datum/Zeit-Typen
 sqlx = { version = "0.8", features = ["runtime-tokio", "tls-native-tls", "postgres", "chrono"] }
+# dotenv: Lädt .env-Dateien für lokale Entwicklung
 dotenv = "0.15.0"
+# bcrypt: Passwort-Hashing (salt+hash)
 bcrypt = "0.16"
+# tower-http: Middleware (hier: CORS für Browser-Zugriff)
 tower-http = { version = "0.6", features = ["cors"] }
+# chrono: Datum/Zeit-Typen (NaiveDate, NaiveTime) für Log-Tabelle
 chrono = { version = "0.4", features = ["serde"] }
+# tower: Middleware-Layer (wird von axum benötigt)
 tower = "0.5"
+# reqwest: HTTP-Client für den Monitoring-Loop (pingt Endpunkte)
 reqwest = "0.12"

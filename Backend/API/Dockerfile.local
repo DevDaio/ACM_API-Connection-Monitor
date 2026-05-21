@@ -1,7 +1,0 @@
-# ─── Local Binary Dockerfile ───
-FROM gcr.io/distroless/cc-debian12:latest
-
-COPY target/release/Backend /usr/local/bin/Backend
-
-EXPOSE 3000
-CMD ["/usr/local/bin/Backend"]

@@ -1,5 +1,10 @@
+// ─── Modul-Deklaration ───
+// Deklariert das Modul service_modules (async_services), das in service_modules/ definiert ist
 mod service_modules;
 
+// ─── Externe Crates ───
+// axum für HTTP-Routing, serde für Serialisierung/Deserialisierung,
+// sqlx für DB-Zugriff, tower_http für CORS
 use axum::{
     extract::Query,
     http::Method,
@@ -12,24 +17,32 @@ use sqlx::PgPool;
 use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
 
+// ─── App-Zustand ───
+// Globaler App-Zustand: hält den PostgreSQL-Verbindungspool
+// Arc ermoeglicht Thread-sicheres Teilen zwischen allen Handlern
 struct AppState {
     pool: PgPool,
 }
 
-// --- Request / Response types ---
+// ════════════════════════════════════════════════════════════════
+//  Request-Typen (Deserialize) – werden aus JSON geparst
+// ════════════════════════════════════════════════════════════════
 
+// Request-Body für die Account-Erstellung: E-Mail und Passwort
 #[derive(Deserialize)]
 struct CreateAccountReq {
     email: String,
     password: String,
 }
 
+// Request-Body für den Login: E-Mail und Passwort
 #[derive(Deserialize)]
 struct LoginReq {
     email: String,
     password: String,
 }
 
+// Request-Body für Passwortänderung: User-ID, altes und neues Passwort
 #[derive(Deserialize)]
 struct ChangePasswordReq {
     userid: i32,
@@ -37,66 +50,88 @@ struct ChangePasswordReq {
     new_password: String,
 }
 
+// Request-Body für E-Mail-Änderung: User-ID und neue E-Mail
 #[derive(Deserialize)]
 struct ChangeEmailReq {
     userid: i32,
     new_email: String,
 }
 
+// Request-Body für Account-Löschung: nur User-ID
 #[derive(Deserialize)]
 struct DeleteAccountReq {
     userid: i32,
 }
 
+// Request-Body zum Hinzufügen eines Endpunkts: User-ID und URL
 #[derive(Deserialize)]
 struct AddEndpointReq {
     userid: i32,
     url: String,
 }
 
+// Request-Body zum Setzen des Monitoring-Intervalls: Endpunkt-ID und Sekunden
 #[derive(Deserialize)]
 struct SetIntervallReq {
     endpointid: i32,
     seconds: i32,
 }
 
+// Request-Body zum Löschen eines Endpunkts: nur Endpunkt-ID
 #[derive(Deserialize)]
 struct DeleteEndpointReq {
     endpointid: i32,
 }
 
+// Request-Body zum Aktualisieren eines Endpunkts: Endpunkt-ID und neue URL
 #[derive(Deserialize)]
 struct UpdateEndpointReq {
     endpointid: i32,
     url: String,
 }
 
+// Query-Parameter für einfache ID-basierte GET-Endpunkte (z. B. /acm/home?id=1)
 #[derive(Deserialize)]
 struct IdParam {
     id: i32,
 }
 
+// ════════════════════════════════════════════════════════════════
+//  Response-Typen (Serialize) – werden zu JSON serialisiert
+// ════════════════════════════════════════════════════════════════
+
+// Response für Login/Account-Erstellung: User-ID und E-Mail-Adresse
 #[derive(Serialize)]
 struct LoginRes {
     userid: i32,
     emailadress: String,
 }
 
+// Einheitliche Fehler-Response mit Fehlermeldung
 #[derive(Serialize)]
 struct ErrorRes {
     error: String,
 }
 
-// --- Handlers ---
+// ════════════════════════════════════════════════════════════════
+//  Route-Handler – jeder Handler ist eine async fn
+// ════════════════════════════════════════════════════════════════
 
+// [GET /acm] Gesundheitscheck – gibt Status "ok" zurück
+// Dient als Lebenszeichen für Load-Balancer oder externe Checks
 async fn handle_healthcheck() -> Json<serde_json::Value> {
     Json(serde_json::json!({ "status": "ok", "message": "ACM API Connection Monitor" }))
 }
 
+// [POST /acm/createAccount] Erstellt einen neuen Account.
+// 1. Prüft, ob die E-Mail bereits existiert (sonst 409 CONFLICT)
+// 2. Hasht das Passwort mit bcrypt (Default-Cost = 12)
+// 3. Speichert user in der DB und gibt userid + email zurück
 async fn handle_create_account(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(body): Json<CreateAccountReq>,
 ) -> Result<Json<LoginRes>, (axum::http::StatusCode, Json<ErrorRes>)> {
+    // Prüfen, ob E-Mail schon vergeben ist
     let existing = async_services::get_user_by_email(&state.pool, &body.email)
         .await
         .map_err(|e| {
@@ -115,6 +150,8 @@ async fn handle_create_account(
         ));
     }
 
+    // Passwort hashen – bcrypt mit Default-Cost
+    // DEFAULT_COST = 12 => ~250ms Hash-Zeit (Sicherheit vs. Performance)
     let hashed = bcrypt::hash(&body.password, bcrypt::DEFAULT_COST).map_err(|e| {
         (
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
@@ -122,6 +159,7 @@ async fn handle_create_account(
         )
     })?;
 
+    // User in DB anlegen und zurückgeben
     let user = async_services::create_account(&state.pool, &body.email, &hashed)
         .await
         .map_err(|e| {
@@ -137,10 +175,14 @@ async fn handle_create_account(
     }))
 }
 
+// [POST /acm/login] Authentifiziert einen Benutzer.
+// Validiert E-Mail + Passwort gegen die DB.
+// Bei Erfolg: userid + email. Bei Fehler: 401 UNAUTHORIZED.
 async fn handle_login(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(body): Json<LoginReq>,
 ) -> Result<Json<LoginRes>, (axum::http::StatusCode, Json<ErrorRes>)> {
+    // User anhand der E-Mail laden
     let user = async_services::get_user_by_email(&state.pool, &body.email)
         .await
         .map_err(|e| {
@@ -149,6 +191,8 @@ async fn handle_login(
                 Json(ErrorRes { error: e.to_string() }),
             )
         })?
+        // Wenn keine E-Mail gefunden -> 401 (gleiche Fehlermeldung wie bei falschem PW,
+        // damit ein Angreifer nicht weiss, ob die E-Mail existiert)
         .ok_or((
             axum::http::StatusCode::UNAUTHORIZED,
             Json(ErrorRes {
@@ -156,6 +200,7 @@ async fn handle_login(
             }),
         ))?;
 
+    // bcrypt-Vergleich: gegebene Passwort vs. gehashter String aus der DB
     let valid = bcrypt::verify(&body.password, &user.password).map_err(|e| {
         (
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
@@ -178,6 +223,9 @@ async fn handle_login(
     }))
 }
 
+// [GET /acm/home?id=...] Liefert alle Endpunkte eines Benutzers.
+// Der Query-Parameter ?id= wird via "Query<IdParam>" extrahiert.
+// Gibt ein Array von EndpointExtended zurück (enthält Status, Interval, History).
 async fn handle_home(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Query(params): Query<IdParam>,
@@ -193,6 +241,7 @@ async fn handle_home(
     Ok(Json(endpoints))
 }
 
+// [GET /acm/user?id=...] Gibt die Daten eines Benutzers zurück
 async fn handle_user(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Query(params): Query<IdParam>,
@@ -208,6 +257,8 @@ async fn handle_user(
     Ok(Json(user))
 }
 
+// [PUT /acm/user/changePassword] Ändert das Passwort.
+// 1. User aus DB laden 2. Altes Passwort validieren 3. Neues hashen 4. Speichern
 async fn handle_change_password(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(body): Json<ChangePasswordReq>,
@@ -221,6 +272,7 @@ async fn handle_change_password(
             )
         })?;
 
+    // Altes Passwort verifizieren, bevor das neue gesetzt wird
     let valid = bcrypt::verify(&body.old_password, &user.password).map_err(|e| {
         (
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
@@ -237,6 +289,7 @@ async fn handle_change_password(
         ));
     }
 
+    // Neues Passwort hashen und speichern
     let hashed = bcrypt::hash(&body.new_password, bcrypt::DEFAULT_COST).map_err(|e| {
         (
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
@@ -256,6 +309,7 @@ async fn handle_change_password(
     Ok(Json(serde_json::json!({ "status": "ok" })))
 }
 
+// [PUT /acm/user/changeEmail] Ändert die E-Mail-Adresse eines Benutzers
 async fn handle_change_email(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(body): Json<ChangeEmailReq>,
@@ -271,6 +325,8 @@ async fn handle_change_email(
     Ok(Json(serde_json::json!({ "status": "ok" })))
 }
 
+// [DELETE /acm/user/deleteAccount] Löscht einen Account
+// CASCADE in der DB löscht automatisch zugehörige Endpunkte, Logs, Intervalle
 async fn handle_delete_account(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(body): Json<DeleteAccountReq>,
@@ -286,6 +342,8 @@ async fn handle_delete_account(
     Ok(Json(serde_json::json!({ "status": "ok" })))
 }
 
+// [PUT /acm/addEndpoint] Fügt einen neuen Endpunkt für einen Benutzer hinzu.
+// Erzeugt einen Eintrag in endpoint + userendpoint. Gibt die neue endpointid zurück.
 async fn handle_add_endpoint(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(body): Json<AddEndpointReq>,
@@ -301,6 +359,8 @@ async fn handle_add_endpoint(
     Ok(Json(serde_json::json!({ "endpointid": endpointid })))
 }
 
+// [PUT /acm/setIntervall] Setzt das Monitoring-Intervall für einen Endpunkt.
+// Nutzt ON CONFLICT (upsert) – wenn bereits ein Intervall existiert, wird es überschrieben.
 async fn handle_set_intervall(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(body): Json<SetIntervallReq>,
@@ -316,6 +376,8 @@ async fn handle_set_intervall(
     Ok(Json(serde_json::json!({ "status": "ok" })))
 }
 
+// [PUT /acm/deleteConfirm] Löscht einen Endpunkt.
+// Entfernt zugehörige Logs, Intervall, userendpoint-Verknüpfung und endpoint selbst.
 async fn handle_delete_endpoint(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(body): Json<DeleteEndpointReq>,
@@ -331,6 +393,8 @@ async fn handle_delete_endpoint(
     Ok(Json(serde_json::json!({ "status": "ok" })))
 }
 
+// [GET /acm/log?id=...] Liefert die Monitoring-Logs eines Endpunkts.
+// Sortiert absteigend nach Datum + Uhrzeit (neueste zuerst).
 async fn handle_log(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Query(params): Query<IdParam>,
@@ -346,6 +410,7 @@ async fn handle_log(
     Ok(Json(logs))
 }
 
+// [PUT /acm/updateEndpoint] Aktualisiert die URL eines Endpunkts
 async fn handle_update_endpoint(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(body): Json<UpdateEndpointReq>,
@@ -361,13 +426,23 @@ async fn handle_update_endpoint(
     Ok(Json(serde_json::json!({ "status": "ok" })))
 }
 
+// ════════════════════════════════════════════════════════════════
+//  Main – Einstiegspunkt
+// ════════════════════════════════════════════════════════════════
+
+// #[tokio::main] ist das Makro, das die async-Runtime initialisiert
+// Es wrappt main() in einen tokio::runtime::Runtime
 #[tokio::main]
 async fn main() -> Result<(), sqlx::Error> {
+    // Lädt .env-Datei (nicht kritisch – unwrap_or_else gibt Default-String)
     dotenv::dotenv().ok();
 
+    // DATABASE_URL aus Umgebungsvariable lesen, sonst Default für lokale Entwicklung
     let database_url = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://admin:admin@localhost:5432/mydb".to_string());
 
+    // PgPoolOptions: Connection-Pool mit max 5 gleichzeitigen Verbindungen
+    // sqlx führt das Verbinden erst bei .connect() aus – pooled connections sind lazy
     let pool = PgPoolOptions::new()
         .max_connections(5)
         .connect(&database_url)
@@ -375,19 +450,28 @@ async fn main() -> Result<(), sqlx::Error> {
 
     println!("Connected to database");
 
+    // ─── Monitoring-Loop in eigenem Task starten ───
+    // tokio::spawn startet einen grünen Thread (Task) im Hintergrund.
+    // Der Loop läuft unabhängig vom HTTP-Server und überwacht Endpunkte.
     let monitor_pool = pool.clone();
     tokio::spawn(async move {
         async_services::run_monitoring_loop(monitor_pool).await;
     });
     println!("Monitoring loop started");
 
+    // AppState in Arc verpacken – geteilter Zustand für alle Handler
     let state = Arc::new(AppState { pool });
 
+    // ─── CORS-Konfiguration ───
+    // Erlaubt alle Origins und alle Header – für Entwicklung okay,
+    // in Produktion sollte allow_origin auf die konkrete Frontend-Domain gesetzt werden
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
         .allow_headers(Any);
 
+    // ─── Router bauen ───
+    // Jede Route wird mit HTTP-Methode + Path an den Handler gebunden
     let app = Router::new()
         .route("/acm", get(handle_healthcheck))
         .route("/acm/login", post(handle_login))
@@ -405,11 +489,17 @@ async fn main() -> Result<(), sqlx::Error> {
         .layer(cors)
         .with_state(state);
 
+    // ─── HTTP-Server starten ───
+    // Bindet an 0.0.0.0:3000 (alle Netzwerkinterfaces)
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     println!("Server running on http://0.0.0.0:3000");
+    // axum::serve ist der async-HTTP-Server – blockt bis zum Abbruch
     axum::serve(listener, app).await.unwrap();
 
     Ok(())
 }
 
+// Import muss hier unten stehen (use-Anweisungen muessen in Rust nicht oben sein,
+// aber Konvention ist, sie an den Dateianfang zu setzen – dieser hier ist verschoben,
+// weil PgPoolOptions erst nach sqlx importiert wird)
 use sqlx::postgres::PgPoolOptions;
