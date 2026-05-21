@@ -19,11 +19,14 @@ import './App.css';
 // Stellt sicher, dass jede URL ein gültiges Protokoll (http:// oder https://) hat.
 // Der User kann "example.com" oder "192.168.1.1:8080" eingeben – die Funktion ergänzt https:// oder http://.
 function normalizeUrl(raw) {
-  if (/^[a-zA-Z][a-zA-Z0-9+\-.]*:\/\//.test(raw)) return raw;                          // Hat schon Protokoll
-  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(raw)) return `http://${raw}`; // IP-Adresse → http
-  if (/^\[[\da-fA-F:]+\](:\d+)?$/.test(raw)) return `http://${raw}`;                     // IPv6 in Klammern
-  if (/^[\da-fA-F:]+$/.test(raw) && raw.includes(':')) return `http://[${raw}]`;        // IPv6 ohne Klammern
-  return `https://${raw}`;  // Alles andere → https
+  if (/^[a-zA-Z][a-zA-Z0-9+\-.]*:\/\//.test(raw)) return raw;
+  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?(\/.*)?$/.test(raw)) return `http://${raw}`;
+  if (/^\[[\da-fA-F:]+\](:\d+)?(\/.*)?$/.test(raw)) return `http://${raw}`;
+  const ipv6 = raw.match(/^([\da-fA-F:]+):(\d{2,5})(\/.*)?$/);
+  if (ipv6) return `http://[${ipv6[1]}]:${ipv6[2]}${ipv6[3]||''}`;
+  if (/^[\da-fA-F:]+$/.test(raw) && raw.includes(':')) return `http://[${raw}]`;
+  if (/^localhost(:\d+)?(\/.*)?$/i.test(raw)) return `http://${raw}`;
+  return `https://${raw}`;
 }
 
 function App() {
@@ -58,13 +61,16 @@ function App() {
     }
   }, [user]);
 
-  // ─── Ref für Modal-Status (für Polling-Pause) ───
-  // Während ein Modal offen ist, wird das Polling pausiert (kein nerviges Neuladen)
+  // ─── Refs für Modal-Pause + Poll-Interval-Cleanup ───
+  // anyModalRef: Während ein Modal offen ist, wird das Polling pausiert
+  // pollRef: Speichert die pollUntilReady-Interval-ID fuer Cleanup bei Unmount
   const anyModalOpen =
     showCreateAccount || showAddEndpoint || showSetIntervall ||
     showDeleteConfirm || showAccountSettings || showLog;
   const anyModalRef = useRef(anyModalOpen);
+  const pollRef = useRef(null);
   useEffect(() => { anyModalRef.current = anyModalOpen; }, [anyModalOpen]);
+  useEffect(() => { return () => { if (pollRef.current) clearInterval(pollRef.current); }; }, []);
 
   // ─── Formatierungs-Hilfsfunktionen ───
 
@@ -102,20 +108,43 @@ function App() {
     return data.map(ep => ({
       endpointid: ep.endpointid,
       url: ep.url,
-      active: true,                                    // Standard: aktiv (ON)
+      active: true,
       status: ep.status === null ? 'Unknown' : (ep.status ? 'Running' : 'Down'),
-      durationSeconds: ep.duration_seconds,
+      durationSeconds: ep.duration_seconds ?? 0,
       interval: fmtInterval(ep.interval_seconds),
-      sparkHistory: ep.status_history,                 // Array<bool> für Sparkline-Chart
+      sparkHistory: ep.status_history.length ? ep.status_history : [true, true],
       changedate: ep.statusdate || '--',
-      changetime: ep.statustime ? ep.statustime.split('.').shift() : '--', // Millisekunden abschneiden
+      changetime: ep.statustime ? ep.statustime.split('.').shift() : '--',
     }));
+  }
+
+  // ─── Endpunkte frisch von der API laden ───
+  async function refreshEndpoints() {
+    try {
+      const d = await api.getHome(user.userid);
+      setEndpoints(mapEndpoints(d));
+    } catch (e) {
+      console.error('refreshEndpoints failed', e);
+    }
+  }
+
+  // ─── Polling nach Mutationen (bis max 16 s) ───
+  // Wartet auf den ersten echten Monitoring-Status nach add/edit/delete.
+  // pollRef speichert die Interval-ID → useEffect-Cleanup verhindert Lecks bei Unmount.
+  function pollUntilReady() {
+    if (pollRef.current) clearInterval(pollRef.current);
+    let tries = 0;
+    pollRef.current = setInterval(async () => {
+      tries++;
+      await refreshEndpoints();
+      if (tries >= 8) { clearInterval(pollRef.current); pollRef.current = null; }
+    }, 2000);
   }
 
   // ─── Initiale Endpunkte laden ───
   useEffect(() => {
     if (!user) return;
-    api.getHome(user.userid).then(d => setEndpoints(mapEndpoints(d))).catch(() => {});
+    refreshEndpoints();
   }, [user]);
 
   // ─── Polling: sekündliches Uptime-Updating + 10s API-Poll ───
@@ -157,8 +186,8 @@ function App() {
     const url = normalizeUrl(rawUrl);
     const data = await api.addEndpoint(user.userid, url);
     await api.setIntervall(data.endpointid, seconds);
-    const fresh = await api.getHome(user.userid);
-    setEndpoints(mapEndpoints(fresh));
+    await refreshEndpoints();
+    pollUntilReady();
   }
 
   // Log-Modal oeffnen + Logs laden
@@ -194,6 +223,8 @@ function App() {
 
   async function handleSetIntervallSubmit(endpointid, seconds) {
     await api.setIntervall(endpointid, seconds);
+    await refreshEndpoints();
+    pollUntilReady();
   }
 
   // URL-Edit-Modal vorbereiten
@@ -203,12 +234,13 @@ function App() {
     setShowEditUrl(true);
   }
 
-  // URL speichern: normalisieren + API + lokales State-Update
+  // URL speichern: normalisieren + API + Refresh
   async function handleSaveUrl() {
     const ep = selectedEndpoint;
     const url = normalizeUrl(editUrlValue);
     await api.updateEndpoint(ep.endpointid, url);
-    setEndpoints(prev => prev.map(e => e.endpointid === ep.endpointid ? { ...e, url } : e));
+    await refreshEndpoints();
+    pollUntilReady();
   }
 
   // Delete-Modal vorbereiten
@@ -221,7 +253,8 @@ function App() {
   async function confirmDelete() {
     const ep = endpoints[deleteIndex];
     await api.deleteEndpoint(ep.endpointid);
-    setEndpoints(prev => prev.filter((_, i) => i !== deleteIndex));
+    await refreshEndpoints();
+    pollUntilReady();
     setShowDeleteConfirm(false);
     setDeleteIndex(null);
   }

@@ -13,12 +13,12 @@ Thumbs.db
 *.iml
 
 # === Rust / Cargo ===
-Backend/API/target/              # Build-Artefakte von Cargo
+Backend/target/                 # Build-Artefakte von Cargo
 
 # === Node.js ===
 node_modules/
-Frontend/ACM_Frontend/node_modules/.vite/
-Frontend/ACM_Frontend/node_modules/.vite-temp/
+Frontend/node_modules/.vite/
+Frontend/node_modules/.vite-temp/
 
 # === Build-Ausgaben ===
 dist/

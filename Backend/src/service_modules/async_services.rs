@@ -22,12 +22,15 @@ pub struct User {
 }
 
 // Log-Eintrag: speichert Status (up/down) mit Zeitstempel
+// url: die URL zum Zeitpunkt des Checks/Edits (NULL bei alten Einträgen)
+// status: NULL wenn es ein Edit-Event ist (kein Monitor-Check)
 #[derive(sqlx::FromRow, serde::Serialize, serde::Deserialize)]
 pub struct Log {
     pub endpointid: i32,
-    pub status: bool,           // true = up, false = down
+    pub status: Option<bool>,    // true = up, false = down, NULL = URL-Edit
     pub statusdate: NaiveDate,  // Datum des Status-Checks
     pub statustime: NaiveTime,  // Uhrzeit des Status-Checks
+    pub url: Option<String>,    // URL zum Zeitpunkt des Eintrags
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -64,7 +67,7 @@ pub struct EndpointExtended {
     pub statustime: Option<NaiveTime>,          // Uhrzeit des letzten Status
     pub duration_seconds: Option<i32>,          // Sekunden seit dem letzten Statuswechsel
     pub interval_seconds: Option<i32>,          // eingestelltes Check-Intervall (NULL wenn keins)
-    pub status_history: Option<Vec<bool>>,      // letzte 30 Status-Eintraege fuer Sparkline
+    pub status_history: Vec<bool>,               // letzte 30 Status-Eintraege fuer Sparkline
 }
 
 // Holt alle Endpunkte eines Users mit aktuellen Status-Informationen.
@@ -89,8 +92,10 @@ pub async fn get_user_endpoints(pool: &PgPool, userid: i32) -> Result<Vec<Endpoi
                   )))::integer \
                 ELSE NULL END AS duration_seconds, \
                 i.seconds AS interval_seconds, \
-                ARRAY(SELECT status FROM log WHERE endpointid = e.endpointid \
-                      ORDER BY statusdate ASC, statustime ASC LIMIT 30) AS status_history \
+                COALESCE((SELECT ARRAY(SELECT status FROM (SELECT status, statusdate, statustime \
+                      FROM log WHERE endpointid = e.endpointid AND status IS NOT NULL \
+                      ORDER BY statusdate DESC, statustime DESC LIMIT 30 \
+                ) sub ORDER BY statusdate ASC, statustime ASC)), ARRAY[]::BOOLEAN[]) AS status_history \
          FROM endpoint e \
          JOIN userendpoint ue ON e.endpointid = ue.endpointid \
          LEFT JOIN intervall i ON i.endpointid = e.endpointid \
@@ -277,14 +282,16 @@ pub async fn get_log(pool: &PgPool, endpointid: i32) -> Result<Vec<Log>, sqlx::E
     Ok(logs)
 }
 
-// Fügt einen Log-Eintrag ein (status: true=up, false=down).
-// statusdate und statustime werden automatisch per DEFAULT auf CURRENT_DATE/CURRENT_TIME gesetzt.
-pub async fn insert_log(pool: &PgPool, endpointid: i32, status: bool) -> Result<PgQueryResult, sqlx::Error> {
+// Fügt einen Log-Eintrag ein.
+// status: Some(true/false) = Monitor-Check, None = URL-Edit
+// url: wird mitgespeichert, damit Änderungen nachvollziehbar sind
+pub async fn insert_log(pool: &PgPool, endpointid: i32, status: Option<bool>, url: Option<&str>) -> Result<PgQueryResult, sqlx::Error> {
     let rows = sqlx::query(
-        "INSERT INTO log (endpointid, status) VALUES ($1, $2)"
+        "INSERT INTO log (endpointid, status, url) VALUES ($1, $2, $3)"
     )
     .bind(endpointid)
     .bind(status)
+    .bind(url)
     .execute(pool)
     .await?;
     Ok(rows)
@@ -365,8 +372,8 @@ pub async fn run_monitoring_loop(pool: PgPool) {
                 Err(_) => false,
             };
 
-            // Status in der Log-Tabelle speichern
-            if let Err(e) = insert_log(&pool, ep.endpointid, status).await {
+            // Status + URL in der Log-Tabelle speichern
+            if let Err(e) = insert_log(&pool, ep.endpointid, Some(status), Some(&ep.url)).await {
                 eprintln!("[Monitor] Log insert error for ep {}: {e}", ep.endpointid);
             }
 

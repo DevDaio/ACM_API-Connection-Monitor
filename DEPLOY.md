@@ -4,17 +4,28 @@
 
 **Voraussetzungen:** Rust, Node.js 22+, PostgreSQL 17 (lokal)
 
-```bash
-# Backend starten
-cd Backend/API
-DATABASE_URL=postgres://admin:admin@localhost:5432/mydb cargo run
+**1. `.env` konfigurieren**
 
-# Frontend starten (zweites Terminal)
-cd Frontend/ACM_Frontend
+Im Projekt-Root liegt `.env` – dort ggf. `DATABASE_URL`, `BACKEND_PORT`, `FRONTEND_PORT` etc. anpassen.
+
+**2. Backend starten**
+
+```bash
+cd Backend
+cargo run
+```
+
+**3. Frontend starten (zweites Terminal)**
+
+```bash
+cd Frontend
 npm ci
 npm run dev
+```
 
-# Im Browser öffnen
+**4. Im Browser öffnen**
+
+```bash
 open http://localhost:8080
 ```
 
@@ -60,7 +71,7 @@ source "$HOME/.cargo/env"
 
 ```bash
 git clone <dein-repo-url> /opt/acm-backend
-cd /opt/acm-backend/Backend/API
+cd /opt/acm-backend/Backend
 
 # DATABASE_URL auf RDS-Endpoint setzen
 export DATABASE_URL="postgres://acm_admin:<passwort>@acmdb.xxxxxxx.eu-central-1.rds.amazonaws.com:5432/acmdb"
@@ -81,10 +92,10 @@ After=network.target
 [Service]
 Type=simple
 User=ec2-user
-WorkingDirectory=/opt/acm-backend/Backend/API
+WorkingDirectory=/opt/acm-backend/Backend
 Environment=DATABASE_URL=postgres://acm_admin:<passwort>@acmdb.xxxxxxx.eu-central-1.rds.amazonaws.com:5432/acmdb
 Environment=RUST_LOG=info
-ExecStart=/opt/acm-backend/Backend/API/target/release/Backend
+ExecStart=/opt/acm-backend/Backend/target/release/Backend
 Restart=always
 
 [Install]
@@ -121,10 +132,11 @@ sudo yum install -y nodejs
 
 ```bash
 git clone <dein-repo-url> /opt/acm-frontend
-cd /opt/acm-frontend/Frontend/ACM_Frontend
+cd /opt/acm-frontend/Frontend
 
-# API-URL auf Backend-EC2 zeigen
-echo "VITE_API_URL=http://<backend-private-ip>:3000" > .env
+# VITE_API_URL NICHT setzen – die API läuft über denselben Nginx
+# (Proxy /acm → Backend, siehe nginx-Konfiguration unten)
+# echo "VITE_API_URL=http://..." > .env   # <-- NICHT nötig
 
 npm ci
 npm run build
@@ -132,15 +144,30 @@ npm run build
 
 #### Nginx-Konfiguration
 
+Der Nginx serviert nicht nur die statischen Frontend-Dateien, sondern leitet auch
+alle `/acm/*`-API-Anfragen an das Backend weiter (Reverse Proxy). Dadurch entfällt
+das CORS-Problem und der Client-Browser muss keine privaten IPs erreichen.
+
 ```nginx
 # /etc/nginx/conf.d/acm.conf
 server {
     listen 80;
     server_name _;
 
-    root /opt/acm-frontend/Frontend/ACM_Frontend/dist;
+    root /opt/acm-frontend/Frontend/dist;
     index index.html;
 
+    # ─── API-Proxy ───
+    # Alle Anfragen an /acm/* werden an das Backend weitergeleitet
+    location /acm/ {
+        proxy_pass http://<backend-private-ip>:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # ─── Statische Frontend-Dateien ───
+    # Alle anderen Anfragen liefern die SPA aus (Client-side Routing)
     location / {
         try_files $uri $uri/ /index.html;
     }
@@ -163,25 +190,32 @@ Optional: HTTPS via Let's Encrypt/Certbot einrichten.
 ## Architektur
 
 ```
-┌──────────┐       ┌──────────────┐       ┌──────────────┐       ┌─────────────┐
-│  Browser │ ──►   │  Frontend    │ ──►   │   Backend    │ ──►   │  RDS (AWS)  │
-│  :80     │       │  EC2 / Nginx │       │  EC2 / Axum  │       │  PostgreSQL │
-└──────────┘       │  :80         │       │  :3000       │       │  :5432      │
-                   └──────────────┘       └──────────────┘       └─────────────┘
+┌──────────┐       ┌──────────────────────┐       ┌──────────────┐       ┌─────────────┐
+│  Browser │ ──►   │  Frontend-EC2        │ ──►   │   Backend    │ ──►   │  RDS (AWS)  │
+│  :80     │       │  Nginx (Proxy :80)   │       │  EC2 / Axum  │       │  PostgreSQL │
+└──────────┘       │  / :80 (static)      │       │  :3000       │       │  :5432      │
+                   │  /acm/* → Backend    │       └──────────────┘       └─────────────┘
+                   └──────────────────────┘
 ```
 
-- **Frontend:** React SPA → Nginx auf eigener EC2 (t3.small)
-- **Backend:** Rust/Axum API auf eigener EC2 (t3.medium)
+- **Frontend:** React SPA → Nginx auf eigener EC2 (t3.small) – serviert statische Dateien + proxyed `/acm/*` ans Backend
+- **Backend:** Rust/Axum API auf eigener EC2 (t3.medium) – nur intern via Nginx-Proxy erreichbar
 - **Datenbank:** PostgreSQL 17 via AWS RDS (db.t3.micro)
 - **Monitoring:** Hintergrund-Task pingt alle aktiven Endpoints
-- **Kommunikation:** Frontend-EC2 → Backend-EC2 (intern), Backend-EC2 → RDS (intern)
+- **Kommunikation:** Browser → Frontend-EC2 (public), Frontend-EC2 → Backend-EC2 (intern via Nginx Proxy), Backend-EC2 → RDS (intern)
 
 ## Umgebungsvariablen (.env)
 
 | Variable | Beschreibung | Beispiel |
 |---|---|---|
 | `DATABASE_URL` | Connection-String zum RDS | `postgres://acm_admin:pass@acmdb.xxx.rds.amazonaws.com:5432/acmdb` |
-| `VITE_API_URL` | API-Basis-URL (Frontend) | `http://<backend-ip>:3000` |
+| `BACKEND_HOST` | Backend-Bind-Addresse | `0.0.0.0` |
+| `BACKEND_PORT` | Backend-Port | `3000` |
+| `FRONTEND_PORT` | Vite-Dev-Server-Port | `8080` |
+| `API_PROXY_TARGET` | Vite-Proxy-Ziel (Backend-URL) | `http://localhost:3000` |
+| `VITE_API_URL` | API-Basis-URL im Frontend-Code | `/acm` |
 | `RUST_LOG` | Log-Level (Backend) | `info` |
+
+> **Hinweis:** In Produktion wird `VITE_API_URL` nicht gesetzt (Default `/acm`), und Nginx proxyt `/acm/*` an das Backend.
 
 

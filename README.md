@@ -26,17 +26,33 @@
 
 **Voraussetzungen:** Rust, Node.js 22+, PostgreSQL 17 (lokal)
 
-```bash
-# 1. Backend starten
-cd Backend/API
-DATABASE_URL=postgres://admin:admin@localhost:5432/mydb cargo run
+**1. Umgebungsvariablen konfigurieren**
 
-# 3. Frontend starten (zweites Terminal)
-cd Frontend/ACM_Frontend
+`.env` im Projekt-Root anlegen (siehe `.env` als Vorlage) und Werte anpassen:
+```bash
+DATABASE_URL=postgres://postgres:admin123!@localhost:5432/database-acm
+BACKEND_HOST=0.0.0.0
+BACKEND_PORT=3000
+FRONTEND_PORT=8080
+API_PROXY_TARGET=http://localhost:3000
+VITE_API_URL=/acm
+```
+
+**2. Backend starten**
+```bash
+cd Backend
+cargo run
+```
+
+**3. Frontend starten (zweites Terminal)**
+```bash
+cd Frontend
 npm install
 npm run dev
+```
 
-# 4. Im Browser
+**4. Im Browser**
+```bash
 open http://localhost:8080
 ```
 
@@ -72,7 +88,7 @@ log (endpointid, status, statusdate, statustime)
 
 ```
 .
-├── Backend/API/
+├── Backend/
 │   ├── src/
 │   │   ├── main.rs                 # Server, Router, CORS, Handler
 │   │   └── service_modules/
@@ -81,7 +97,7 @@ log (endpointid, status, statusdate, statustime)
 │   ├── Cargo.toml
 │   └── Cargo.lock
 │
-├── Frontend/ACM_Frontend/
+├── Frontend/
 │   ├── src/
 │   │   ├── App.jsx                 # Haupt-App mit State-Management
 │   │   ├── api.js                  # API-Client
@@ -101,7 +117,11 @@ log (endpointid, status, statusdate, statustime)
 │   │       ├── EditUrlModal.jsx    # URL bearbeiten
 │   │       ├── Sparkline.jsx       # Mini-Chart
 │   │       └── ThemeSwitcher.jsx   # Farbschema-Auswahl
-│   └── package.json
+│   ├── public/icons.svg
+│   ├── index.html
+│   ├── package.json
+│   ├── vite.config.js
+│   └── eslint.config.js
 │
 ├── DB/createTables.sql             # DB-Init
 │

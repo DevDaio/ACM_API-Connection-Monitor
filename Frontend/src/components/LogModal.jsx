@@ -47,34 +47,41 @@ function LogModal({ isOpen, onClose, entries }) {
 
       {/* ─── Log-Tabelle (scrollbar) ─── */}
       <div className="overflow-auto max-h-[55vh]">
-        <table className="w-full text-sm text-left">
-          <thead>
-            <tr className="text-gray-300 border-b border-gray-700">
-              <th className="pb-2 pr-4">EndpointID</th>
-              <th className="pb-2 pr-4">Status</th>
-              <th className="pb-2 pr-4">StatusTime</th>
-              <th className="pb-2">StatusDay</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 ? (
-              <tr><td colSpan="4" className="py-6 text-gray-300 text-center">Keine Einträge für diesen Filter</td></tr>
-            ) : (
-              filtered.map((entry, i) => (
-                <tr key={i} className="border-b border-gray-800 text-white">
-                  <td className="py-2 pr-4 font-mono">{entry.endpointid}</td>
-                  <td className="py-2 pr-4">
-                    {/* Status-LED: grün=up, rot=down */}
-                    <span className={`inline-block w-2 h-2 ${entry.status ? 'bg-green-500' : 'bg-red-500'} mr-2`} />
-                    {entry.status ? 'Up' : 'Down'}
-                  </td>
-                  <td className="py-2 pr-4 font-mono">{(entry.statustime || entry.time || '').split('.').shift()}</td>
-                  <td className="py-2 font-mono">{entry.statusdate || entry.date}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+          <table className="w-full text-sm text-left">
+            <thead>
+              <tr className="text-gray-300 border-b border-gray-700">
+                <th className="pb-2 pr-4">EndpointID</th>
+                <th className="pb-2 pr-4">Status</th>
+                <th className="pb-2 pr-4">Time</th>
+                <th className="pb-2 pr-4">Date</th>
+                <th className="pb-2">URL</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr><td colSpan="5" className="py-6 text-gray-300 text-center">Keine Einträge für diesen Filter</td></tr>
+              ) : (
+                filtered.map((entry, i) => (
+                  <tr key={i} className="border-b border-gray-800 text-white">
+                    <td className="py-2 pr-4 font-mono">{entry.endpointid}</td>
+                    <td className="py-2 pr-4">
+                      {entry.status === null || entry.status === undefined ? (
+                        <span className="text-yellow-400 text-xs font-mono tracking-wider">EDITED</span>
+                      ) : (
+                        <>
+                          <span className={`inline-block w-2 h-2 ${entry.status ? 'bg-green-500' : 'bg-red-500'} mr-2`} />
+                          {entry.status ? 'Up' : 'Down'}
+                        </>
+                      )}
+                    </td>
+                    <td className="py-2 pr-4 font-mono">{(entry.statustime || entry.time || '').split('.').shift()}</td>
+                    <td className="py-2 pr-4 font-mono">{entry.statusdate || entry.date}</td>
+                    <td className="py-2 font-mono text-xs max-w-[200px] truncate">{entry.url || '—'}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
       </div>
     </Modal>
   );

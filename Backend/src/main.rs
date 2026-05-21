@@ -411,6 +411,7 @@ async fn handle_log(
 }
 
 // [PUT /acm/updateEndpoint] Aktualisiert die URL eines Endpunkts
+// Schreibt einen Log-Eintrag mit der neuen URL, damit Änderungen nachvollziehbar sind
 async fn handle_update_endpoint(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(body): Json<UpdateEndpointReq>,
@@ -423,6 +424,19 @@ async fn handle_update_endpoint(
                 Json(ErrorRes { error: e.to_string() }),
             )
         })?;
+    async_services::insert_log(
+        &state.pool,
+        body.endpointid,
+        None,
+        Some(&body.url),
+    )
+    .await
+    .map_err(|e| {
+        (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorRes { error: e.to_string() }),
+        )
+    })?;
     Ok(Json(serde_json::json!({ "status": "ok" })))
 }
 
@@ -449,6 +463,16 @@ async fn main() -> Result<(), sqlx::Error> {
         .await?;
 
     println!("Connected to database");
+
+    // ─── Tabellen automatisch anlegen (falls nicht vorhanden) ───
+    sqlx::query(r#"CREATE TABLE IF NOT EXISTS "user" (userid INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY, emailadress VARCHAR(100) NOT NULL UNIQUE, password VARCHAR(100) NOT NULL)"#).execute(&pool).await?;
+    sqlx::query("CREATE TABLE IF NOT EXISTS endpoint (endpointid INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY, url VARCHAR(300) NOT NULL)").execute(&pool).await?;
+    sqlx::query("CREATE TABLE IF NOT EXISTS userendpoint (userid INTEGER NOT NULL, endpointid INTEGER NOT NULL, PRIMARY KEY (userid, endpointid), FOREIGN KEY (userid) REFERENCES \"user\"(userid) ON DELETE CASCADE, FOREIGN KEY (endpointid) REFERENCES endpoint(endpointid) ON DELETE CASCADE)").execute(&pool).await?;
+    sqlx::query("CREATE TABLE IF NOT EXISTS intervall (endpointid INTEGER PRIMARY KEY, seconds INTEGER NOT NULL, FOREIGN KEY (endpointid) REFERENCES endpoint(endpointid) ON DELETE CASCADE)").execute(&pool).await?;
+    sqlx::query("CREATE TABLE IF NOT EXISTS log (endpointid INTEGER NOT NULL, status BOOLEAN, statusdate DATE NOT NULL DEFAULT CURRENT_DATE, statustime TIME NOT NULL DEFAULT CURRENT_TIME, url VARCHAR(300), FOREIGN KEY (endpointid) REFERENCES endpoint(endpointid) ON DELETE CASCADE)").execute(&pool).await?;
+    sqlx::query("ALTER TABLE log ADD COLUMN IF NOT EXISTS url VARCHAR(300)").execute(&pool).await?;
+    sqlx::query("ALTER TABLE log ALTER COLUMN status DROP NOT NULL").execute(&pool).await?;
+    println!("Tables ready");
 
     // ─── Monitoring-Loop in eigenem Task starten ───
     // tokio::spawn startet einen grünen Thread (Task) im Hintergrund.
@@ -490,9 +514,12 @@ async fn main() -> Result<(), sqlx::Error> {
         .with_state(state);
 
     // ─── HTTP-Server starten ───
-    // Bindet an 0.0.0.0:3000 (alle Netzwerkinterfaces)
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    println!("Server running on http://0.0.0.0:3000");
+    // BACKEND_HOST + BACKEND_PORT aus .env oder Default (0.0.0.0:3000)
+    let bind_host = std::env::var("BACKEND_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
+    let bind_port = std::env::var("BACKEND_PORT").unwrap_or_else(|_| "3000".to_string());
+    let bind_addr = format!("{}:{}", bind_host, bind_port);
+    let listener = tokio::net::TcpListener::bind(&bind_addr).await.unwrap();
+    println!("Server running on http://{}", bind_addr);
     // axum::serve ist der async-HTTP-Server – blockt bis zum Abbruch
     axum::serve(listener, app).await.unwrap();
 
