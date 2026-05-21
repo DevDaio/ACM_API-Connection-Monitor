@@ -1,1 +1,4 @@
+// ─── Tailwind CSS import ───
+// @import "tailwindcss" lädt Tailwind CSS 4 mit allen Utility-Klassen
+// Es ersetzt die alten @tailwind base/components/utilities Direktiven
 @import "tailwindcss";

@@ -1,3 +1,5 @@
+// ─── CreateAccountModal – Benutzerkonto erstellen ───
+// Formular: E-Mail, Passwort, Passwort-Bestätigung.
 import { useState, useRef } from 'react';
 import Modal from './Modal';
 
@@ -12,6 +14,7 @@ function CreateAccountModal({ isOpen, onClose, onSubmit }) {
     e.preventDefault();
     setError('');
 
+    // Client-seitige Validierung: Passwörter müssen übereinstimmen
     if (passwordRef.current.value !== confirmRef.current.value) {
       setError('Passwörter stimmen nicht überein');
       return;
@@ -20,6 +23,7 @@ function CreateAccountModal({ isOpen, onClose, onSubmit }) {
     setLoading(true);
     try {
       await onSubmit(emailRef.current.value, passwordRef.current.value);
+      // Kein onClose() – bei Erfolg wird der User gesetzt und das Modal geht automatisch zu
     } catch (err) {
       setError(err.message);
     } finally {

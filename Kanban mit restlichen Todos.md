@@ -6,12 +6,12 @@ kanban-plugin: board
 
 ## Restliche To-Do
 
-- [ ] Deployment Strategie
-- [ ] Autorefresh after State Change/Neuanlage/Bearbeitung/Intervall
 
 
 ## In Bearbeitung
 
+- [ ] Deployment Strategie
+- [ ] Autorefresh after State Change/Neuanlage/Bearbeitung/Intervall
 
 
 ## Tested

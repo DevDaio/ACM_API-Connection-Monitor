@@ -21,17 +21,13 @@
 | **Backend** | Rust + Axum + Tokio + sqlx |
 | **Datenbank** | PostgreSQL 17 |
 | **Monitoring** | reqwest (HTTP GET) im Hintergrund-Task |
-| **Container** | Docker + Docker Compose |
 
 ## Schnellstart (Entwicklung)
 
-**Voraussetzungen:** Docker (für PostgreSQL), Rust, Node.js 22+
+**Voraussetzungen:** Rust, Node.js 22+, PostgreSQL 17 (lokal)
 
 ```bash
-# 1. Datenbank starten
-docker compose up -d postgres
-
-# 2. Backend starten
+# 1. Backend starten
 cd Backend/API
 DATABASE_URL=postgres://admin:admin@localhost:5432/mydb cargo run
 
@@ -42,28 +38,6 @@ npm run dev
 
 # 4. Im Browser
 open http://localhost:8080
-```
-
-## Deployment (Docker)
-
-```bash
-# 1. Backend bauen
-cd Backend/API
-cargo build --release
-docker build -t acm-backend:latest -f Dockerfile.local .
-cd ../..
-
-# 2. Frontend bauen
-cd Frontend/ACM_Frontend
-npm ci && npm run build
-docker build -t acm-frontend:latest .
-cd ../..
-
-# 3. Starten
-docker compose up -d
-
-# 4. Im Browser
-open http://localhost
 ```
 
 ## API-Routes
@@ -104,8 +78,6 @@ log (endpointid, status, statusdate, statustime)
 │   │   └── service_modules/
 │   │       ├── mod.rs
 │   │       └── async_services.rs   # Datenbank-Queries + Monitoring-Loop
-│   ├── Dockerfile                  # Multi-Stage: Rust → Distroless
-│   ├── Dockerfile.local            # Lokales Binary → Distroless
 │   ├── Cargo.toml
 │   └── Cargo.lock
 │
@@ -129,23 +101,18 @@ log (endpointid, status, statusdate, statustime)
 │   │       ├── EditUrlModal.jsx    # URL bearbeiten
 │   │       ├── Sparkline.jsx       # Mini-Chart
 │   │       └── ThemeSwitcher.jsx   # Farbschema-Auswahl
-│   ├── Dockerfile                  # Nginx mit API-Proxy
 │   └── package.json
 │
 ├── DB/createTables.sql             # DB-Init
 │
-├── docker-compose.yml              # postgres + backend + frontend
-├── setup.sh                        # Ein-Klick-Setup
-├── DEPLOY.md                       # AWS + CI/CD-Anleitung
+├── setup.sh                        # Ein-Klick-Build
+├── DEPLOY.md                       # AWS-Deployment-Anleitung
 └── .env                            # Konfiguration
 ```
 
 ## Deployment
 
-Siehe [DEPLOY.md](DEPLOY.md) für:
-- AWS EC2 Step-by-Step
-- GitHub Actions CI/CD
-- Umgebungsvariablen
+Siehe [DEPLOY.md](DEPLOY.md) für AWS RDS + EC2 Step-by-Step und Umgebungsvariablen.
 
 ## Entwickler
 

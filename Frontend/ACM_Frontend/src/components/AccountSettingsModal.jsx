@@ -1,7 +1,10 @@
+// ─── AccountSettingsModal – Account-Einstellungen ───
+// Drei Bereiche: Passwort ändern, E-Mail ändern, Account löschen.
 import { useState, useRef } from 'react';
 import Modal from './Modal';
 
 function AccountSettingsModal({ isOpen, onClose, onChangePassword, onChangeEmail, onDeleteAccount }) {
+  // useRef für alle Input-Felder
   const oldPwRef = useRef(null);
   const newPwRef = useRef(null);
   const confirmPwRef = useRef(null);
@@ -12,6 +15,7 @@ function AccountSettingsModal({ isOpen, onClose, onChangePassword, onChangeEmail
   const [pwLoading, setPwLoading] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
 
+  // ─── Passwort ändern ───
   async function handlePasswordSubmit(e) {
     e.preventDefault();
     setPwError('');
@@ -22,6 +26,7 @@ function AccountSettingsModal({ isOpen, onClose, onChangePassword, onChangeEmail
     setPwLoading(true);
     try {
       await onChangePassword(oldPwRef.current.value, newPwRef.current.value);
+      // Nach erfolgreicher Änderung Felder leeren
       oldPwRef.current.value = '';
       newPwRef.current.value = '';
       confirmPwRef.current.value = '';
@@ -32,6 +37,7 @@ function AccountSettingsModal({ isOpen, onClose, onChangePassword, onChangeEmail
     }
   }
 
+  // ─── E-Mail ändern ───
   async function handleEmailSubmit(e) {
     e.preventDefault();
     setEmailError('');
@@ -54,6 +60,7 @@ function AccountSettingsModal({ isOpen, onClose, onChangePassword, onChangeEmail
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Account Settings">
       <div className="space-y-6">
+        {/* ─── Passwort-Änderungs-Bereich ─── */}
         <div>
           <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-3">Change Password</h3>
           <form onSubmit={handlePasswordSubmit} className="space-y-3">
@@ -67,6 +74,7 @@ function AccountSettingsModal({ isOpen, onClose, onChangePassword, onChangeEmail
           </form>
         </div>
 
+        {/* ─── E-Mail-Änderungs-Bereich ─── */}
         <div className="border-t border-gray-800 pt-4">
           <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-3">Change Email</h3>
           <form onSubmit={handleEmailSubmit} className="space-y-3">
@@ -79,6 +87,7 @@ function AccountSettingsModal({ isOpen, onClose, onChangePassword, onChangeEmail
           </form>
         </div>
 
+        {/* ─── Account-Lösch-Button (separater Bereich) ─── */}
         <div className="border-t border-gray-800 pt-4">
           <button onClick={onDeleteAccount} className="w-full bg-red-600 hover:bg-red-700 text-white py-2.5  transition-colors">
             Delete Account

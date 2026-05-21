@@ -1,4 +1,4 @@
-# === OS files ===
+# === OS-Dateien ===
 .DS_Store
 Thumbs.db
 *.swp
@@ -13,26 +13,26 @@ Thumbs.db
 *.iml
 
 # === Rust / Cargo ===
-Backend/API/target/
+Backend/API/target/              # Build-Artefakte von Cargo
 
 # === Node.js ===
 node_modules/
 Frontend/ACM_Frontend/node_modules/.vite/
 Frontend/ACM_Frontend/node_modules/.vite-temp/
 
-# === Build output ===
+# === Build-Ausgaben ===
 dist/
 build/
 *.tsbuildinfo
 
-# === Environment / Secrets ===
+# === Umgebungsvariablen / Secrets ===
 .env
 .env.local
 .env.*.local
 *.secret
 secrets/
 
-# === Docker / DB volumes ===
+# === Docker / DB-Volumes ===
 DB/data/
 DB/pgadmin/
 

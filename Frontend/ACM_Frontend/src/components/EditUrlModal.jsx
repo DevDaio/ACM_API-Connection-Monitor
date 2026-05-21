@@ -1,3 +1,5 @@
+// ─── EditUrlModal – URL eines Endpunkts bearbeiten ───
+// Einfaches Formular mit aktueller URL als Prefill.
 import { useState } from 'react';
 import Modal from './Modal';
 
@@ -10,7 +12,7 @@ function EditUrlModal({ isOpen, onClose, endpoint, value, onChange, onSave }) {
     setError('');
     setLoading(true);
     try {
-      await onSave();
+      await onSave();   // Die eigentliche API-Logik liegt in App.handleSaveUrl()
       onClose();
     } catch (err) {
       setError(err.message || 'Fehler beim Speichern');
@@ -24,6 +26,7 @@ function EditUrlModal({ isOpen, onClose, endpoint, value, onChange, onSave }) {
       <form onSubmit={handleSave} className="space-y-4">
         <div>
           <label className="block text-xs text-gray-300 mb-1 font-mono tracking-wider">ENDPOINT_URL</label>
+          {/* value + onChange: controlled component – der State liegt in App (editUrlValue) */}
           <input type="text" required value={value} onChange={e => onChange(e.target.value)}
             className="w-full bg-gray-800 border border-gray-700 px-4 py-2.5 text-white font-mono text-sm focus:outline-none ac-ring" />
         </div>

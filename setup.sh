@@ -1,51 +1,43 @@
 #!/usr/bin/env bash
+# Setup-Skript: Baut Backend und Frontend für lokale Entwicklung
 set -euo pipefail
 
 echo "╔══════════════════════════════════════════╗"
 echo "║   ACM API Connection Monitor — Setup    ║"
 echo "╚══════════════════════════════════════════╝"
 
-# ─── Prüfen ───
-command -v docker >/dev/null 2>&1 || { echo "❌ Docker fehlt"; exit 1; }
+# ─── Pruefen, ob benoetigte Tools installiert sind ───
 command -v cargo >/dev/null 2>&1 || { echo "❌ Rust/Cargo fehlt"; exit 1; }
 command -v npm  >/dev/null 2>&1 || { echo "❌ Node.js/npm fehlt"; exit 1; }
 
-# ─── .env ───
+# ─── .env anlegen, falls nicht vorhanden ───
 if [ ! -f .env ]; then
   cp .env.example .env 2>/dev/null || touch .env
   echo "✅ .env angelegt"
 fi
 
-# ─── Backend ───
+# ─── Backend bauen ───
 echo ""
 echo "→ Backend bauen …"
 cd Backend/API
-cargo build --release
+cargo build --release  # Rust-Release-Build
 cd ../..
+echo "✅ Backend gebaut"
 
-docker build -t acm-backend:latest -f Backend/API/Dockerfile.local Backend/API/
-echo "✅ Backend-Image gebaut"
-
-# ─── Frontend ───
+# ─── Frontend bauen ───
 echo ""
 echo "→ Frontend bauen …"
 cd Frontend/ACM_Frontend
-npm ci
-npm run build
-docker build -t acm-frontend:latest .
+npm ci                    # Installiert exakte Dependencies
+npm run build             # Vite-Produktions-Build
 cd ../..
-echo "✅ Frontend-Image gebaut"
+echo "✅ Frontend gebaut"
 
-# ─── Starten ───
-echo ""
-echo "→ Container starten …"
-docker compose up -d
-
+# ─── Erfolgsmeldung ───
 echo ""
 echo "╔══════════════════════════════════════════╗"
-echo "║   ✅  Deployment abgeschlossen!          ║"
+echo "║   ✅  Build abgeschlossen!               ║"
 echo "║                                          ║"
-echo "║   Frontend:  http://localhost:8080          ║"
-echo "║   Backend:   http://localhost:3000/acm    ║"
-echo "║   Database:  localhost:5432               ║"
+echo "║   Backend:   Backend/API/target/release/ ║"
+echo "║   Frontend:  Frontend/ACM_Frontend/dist/ ║"
 echo "╚══════════════════════════════════════════╝"

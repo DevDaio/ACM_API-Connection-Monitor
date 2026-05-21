@@ -1,3 +1,6 @@
+// ─── Dashboard – Hauptansicht nach dem Login ───
+// Zeigt eine Tabelle aller Endpunkte mit Steuerungselementen.
+// Terminal-inspiriertes Design mit Tabelle, Main-Switch und Header.
 import EndpointCard from './EndpointCard';
 import ThemeSwitcher from './ThemeSwitcher';
 
@@ -15,14 +18,20 @@ function Dashboard({
   onAccountSettings,
 }) {
   return (
+    // ─── Hintergrund mit radialem Gradient + Scanlines ───
     <div className="min-h-screen bg-gray-950 text-white flex flex-col relative overflow-hidden"
       style={{background: 'radial-gradient(ellipse at 50% 0%, #1a0800 0%, #030712 60%)'}}>
+
+      {/* Scanline-Overlay erzeugt CRT-Monitor-Optik */}
       <div className="absolute inset-0 pointer-events-none opacity-[0.03]"
         style={{backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(234,88,12,0.2) 2px, rgba(234,88,12,0.2) 4px)'}} />
 
+      {/* ─── Header ─── */}
       <header className="border-b ac-bd px-8 py-4 flex items-center justify-between shrink-0 bg-gray-950/80 backdrop-blur relative" style={{ zIndex: 100 }}>
+        {/* Logo + Titel */}
         <div className="flex items-center gap-5">
           <svg width="32" height="32" viewBox="0 0 24 24">
+            {/* Zielscheiben-Logo: 3 konzentrische Kreise */}
             <circle cx="12" cy="12" r="10" fill="none" stroke="#ea580c" strokeWidth="1.5" opacity="0.6" />
             <circle cx="12" cy="12" r="6" fill="none" stroke="#ef4444" strokeWidth="1" opacity="0.8" />
             <circle cx="12" cy="12" r="2" fill="#ea580c" />
@@ -35,6 +44,8 @@ function Dashboard({
             <div className="text-[10px] font-mono text-gray-300 tracking-[0.25em]">NODE_MONITOR // ACTIVE</div>
           </div>
         </div>
+
+        {/* Header-Rechts: Counter, Theme, Settings, Logout */}
         <div className="flex items-center gap-5">
           <span className="text-xs font-mono text-gray-300">{endpoints.length} endpoints</span>
           <div className="h-5 w-px ac-bg/20" />
@@ -46,10 +57,12 @@ function Dashboard({
       </header>
 
       <div className="flex-1 w-full px-8 py-6 relative z-10">
-        {/* Main Switch */}
+        {/* ─── Main Switch ─── */}
+        {/* Globaler Toggle-Schalter: schaltet alle Endpunkte ON/OFF */}
         <div className="flex items-center justify-between mb-6 border ac-bd bg-gray-900/50 px-6 py-4 relative"
           style={{boxShadow: 'inset 0 0 20px rgba(234,88,12,0.05)'}}>
           <div className="flex items-center gap-4">
+            {/* Status-LED: gruen wenn alle an, grau wenn alle aus */}
             <span className={`inline-block w-2 h-2 ${mainSwitch ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.8)]' : 'bg-gray-700'}`} />
             <span className="text-sm font-mono ac-tx-hover tracking-widest uppercase font-bold">MAIN_SWITCH</span>
             <span className="text-[10px] font-mono text-gray-300 tracking-wider">TOGGLE_ALL_JOBS</span>
@@ -57,6 +70,7 @@ function Dashboard({
           <div className="flex items-center gap-3">
             <button onClick={onToggleMainSwitch}
               className={`relative w-14 h-1.5 transition-all rounded-full ${mainSwitch ? 'bg-orange-600 shadow-[0_0_10px_rgba(234,88,12,0.5)]' : 'bg-gray-800'}`}>
+              {/* Gleitender Knopf */}
               <span className={`absolute -top-[5px] w-3.5 h-3.5 rounded-full transition-all border-2 ${
                 mainSwitch
                   ? 'right-0 bg-orange-500 border-orange-400 shadow-[0_0_8px_rgba(234,88,12,0.6)]'
@@ -69,9 +83,10 @@ function Dashboard({
           </div>
         </div>
 
-        {/* Data table */}
+        {/* ─── Endpunkt-Tabelle ─── */}
         <div className="border ac-bd relative"
           style={{boxShadow: 'inset 0 0 30px rgba(234,88,12,0.03)'}}>
+          {/* Tabellen-Kopf */}
           <div className="bg-gray-900/80 border-b ac-bd px-5 py-3 flex items-center gap-4">
             <span className="text-[10px] font-mono ac-tx/50 tracking-[0.3em] font-bold">ENDPOINT_LOG</span>
             <div className="h-4 w-px ac-bg/10" />
@@ -93,6 +108,7 @@ function Dashboard({
               </thead>
               <tbody>
                 {endpoints.length === 0 ? (
+                  // Leer-Zustand: wird angezeigt, wenn keine Endpunkte vorhanden sind
                   <tr><td colSpan="7" className="py-20 text-gray-300 text-center font-mono text-sm">[ NO_ENDPOINTS // AWAITING_INPUT ]</td></tr>
                 ) : (
                   endpoints.map((ep, i) => (
@@ -112,11 +128,14 @@ function Dashboard({
           </div>
         </div>
 
+        {/* ─── "+ ADD_ENDPOINT" Button ─── */}
+        {/* Gestrichelter Button am Tabellenende */}
         <button onClick={onAddEndpoint}
           className="mt-5 w-full border border-dashed ac-bd ac-bd-hover ac-tx/60 ac-tx-hover py-4 uppercase tracking-[0.3em] font-mono text-sm font-bold transition-all hover:shadow-[0_0_25px_rgba(234,88,12,0.15)] bg-gray-950/50">
           + ADD_ENDPOINT
         </button>
 
+        {/* ─── Fusszeile: System-Status ─── */}
         <div className="mt-5 flex items-center gap-5 text-[10px] font-mono text-gray-300 tracking-[0.25em]">
           <span>SYS::ONLINE</span>
           <span className="w-1.5 h-1.5 ac-bg/30" />

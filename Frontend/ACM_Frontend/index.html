@@ -1,14 +1,23 @@
 <!doctype html>
+<!--
+  ─── Einstiegspunkt: Vite injiziert hier den gebuendelten React-Code ───
+  Dieses HTML wird im dev-mode direkt serviert, in der Produktion durch Nginx.
+  Vite ersetzt <script type="module" src="/src/main.jsx"> automatisch
+  mit dem gebuildeten Bundle (dist/assets/index-*.js).
+-->
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- Wird im dev-mode durch vite/import z.B. index.css ersetzt; in prod durch tailwind + index.css -->
     <link href="/src/style.css" rel="stylesheet">
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>acm-frontend</title>
   </head>
   <body>
+    <!-- React mountet sich in dieses <div> – nicht loeschen oder umbenennen! -->
     <div id="root"></div>
+    <!-- Vite-Entry: importiert main.jsx, der den React-Baum startet -->
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

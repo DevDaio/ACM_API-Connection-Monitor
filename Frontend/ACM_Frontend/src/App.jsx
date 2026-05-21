@@ -1,3 +1,5 @@
+// ─── Haupt-App-Komponente ───
+// Verwaltet den gesamten App-Status: User-Auth, Endpunkte, Modal-Zustaende.
 import { useState, useEffect, useRef } from 'react';
 import LandingPage from './components/LandingPage';
 import Dashboard from './components/Dashboard';
@@ -13,22 +15,28 @@ import { ThemeProvider } from './ThemeContext';
 import { api } from './api';
 import './App.css';
 
+// ─── URL-Normalisierung ───
+// Stellt sicher, dass jede URL ein gültiges Protokoll (http:// oder https://) hat.
+// Der User kann "example.com" oder "192.168.1.1:8080" eingeben – die Funktion ergänzt https:// oder http://.
 function normalizeUrl(raw) {
-  if (/^[a-zA-Z][a-zA-Z0-9+\-.]*:\/\//.test(raw)) return raw;
-  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(raw)) return `http://${raw}`;
-  if (/^\[[\da-fA-F:]+\](:\d+)?$/.test(raw)) return `http://${raw}`;
-  if (/^[\da-fA-F:]+$/.test(raw) && raw.includes(':')) return `http://[${raw}]`;
-  return `https://${raw}`;
+  if (/^[a-zA-Z][a-zA-Z0-9+\-.]*:\/\//.test(raw)) return raw;                          // Hat schon Protokoll
+  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(raw)) return `http://${raw}`; // IP-Adresse → http
+  if (/^\[[\da-fA-F:]+\](:\d+)?$/.test(raw)) return `http://${raw}`;                     // IPv6 in Klammern
+  if (/^[\da-fA-F:]+$/.test(raw) && raw.includes(':')) return `http://[${raw}]`;        // IPv6 ohne Klammern
+  return `https://${raw}`;  // Alles andere → https
 }
 
 function App() {
+  // ─── State ───
+  // User-State: wird aus localStorage initialisiert (Session-Persistenz)
   const [user, setUser] = useState(() => {
     const saved = localStorage.getItem('acm_user');
     return saved ? JSON.parse(saved) : null;
   });
   const [endpoints, setEndpoints] = useState([]);
-  const [mainSwitch, setMainSwitch] = useState(true);
+  const [mainSwitch, setMainSwitch] = useState(true);  // Globaler Toggle (alle Endpunkte ON/OFF)
 
+  // Modal-Controls
   const [showCreateAccount, setShowCreateAccount] = useState(false);
   const [showAddEndpoint, setShowAddEndpoint] = useState(false);
   const [showSetIntervall, setShowSetIntervall] = useState(false);
@@ -41,6 +49,7 @@ function App() {
   const [showEditUrl, setShowEditUrl] = useState(false);
   const [editUrlValue, setEditUrlValue] = useState('');
 
+  // ─── User in localStorage persistieren ───
   useEffect(() => {
     if (user) {
       localStorage.setItem('acm_user', JSON.stringify(user));
@@ -49,12 +58,17 @@ function App() {
     }
   }, [user]);
 
+  // ─── Ref für Modal-Status (für Polling-Pause) ───
+  // Während ein Modal offen ist, wird das Polling pausiert (kein nerviges Neuladen)
   const anyModalOpen =
     showCreateAccount || showAddEndpoint || showSetIntervall ||
     showDeleteConfirm || showAccountSettings || showLog;
   const anyModalRef = useRef(anyModalOpen);
   useEffect(() => { anyModalRef.current = anyModalOpen; }, [anyModalOpen]);
 
+  // ─── Formatierungs-Hilfsfunktionen ───
+
+  // Dauer/Uptime formatieren: Sekunden → "Xd HH:MM:SS" oder "XXmo Yd HH:MM"
   function fmtDuration(secs) {
     if (secs == null) return '--';
     const d = Math.floor(secs / 86400);
@@ -70,6 +84,7 @@ function App() {
     return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
   }
 
+  // Intervall formatieren: Sekunden → "1h 30m 0s"
   function fmtInterval(secs) {
     if (secs == null) return '--';
     const h = Math.floor(secs / 3600);
@@ -82,50 +97,62 @@ function App() {
     return parts.join(' ');
   }
 
+  // API-Daten in Dashboard-kompatibles Format mappen
   function mapEndpoints(data) {
     return data.map(ep => ({
       endpointid: ep.endpointid,
       url: ep.url,
-      active: true,
+      active: true,                                    // Standard: aktiv (ON)
       status: ep.status === null ? 'Unknown' : (ep.status ? 'Running' : 'Down'),
       durationSeconds: ep.duration_seconds,
       interval: fmtInterval(ep.interval_seconds),
-      sparkHistory: ep.status_history,
+      sparkHistory: ep.status_history,                 // Array<bool> für Sparkline-Chart
       changedate: ep.statusdate || '--',
-      changetime: ep.statustime ? ep.statustime.split('.').shift() : '--',
+      changetime: ep.statustime ? ep.statustime.split('.').shift() : '--', // Millisekunden abschneiden
     }));
   }
 
+  // ─── Initiale Endpunkte laden ───
   useEffect(() => {
     if (!user) return;
     api.getHome(user.userid).then(d => setEndpoints(mapEndpoints(d))).catch(() => {});
   }, [user]);
 
+  // ─── Polling: sekündliches Uptime-Updating + 10s API-Poll ───
   useEffect(() => {
     if (!user) return;
     const tick = setInterval(() => {
+      // Lokaler Uptime-Counter (ohne API-Aufruf)
       setEndpoints(prev => prev.map(ep =>
         ep.durationSeconds != null ? { ...ep, durationSeconds: ep.durationSeconds + 1 } : ep
       ));
     }, 1000);
     const poll = setInterval(() => {
+      // API-Poll nur, wenn kein Modal offen ist (anyModalRef = aktueller Wert ohne Re-render)
       if (anyModalRef.current) return;
       api.getHome(user.userid).then(d => setEndpoints(mapEndpoints(d))).catch(() => {});
     }, 10000);
     return () => { clearInterval(tick); clearInterval(poll); };
   }, [user]);
 
+  // ════════════════════════════════════════════════════════════════
+  //  Event-Handler (werden an Child-Komponenten weitergereicht)
+  // ════════════════════════════════════════════════════════════════
+
+  // Login: user setzen (triggert Endpunkt-Laden via useEffect)
   async function handleLogin(email, password) {
     const data = await api.login(email, password);
     setUser({ userid: data.userid, email: data.emailadress });
   }
 
+  // Account erstellen + automatisch einloggen
   async function handleCreateAccount(email, password) {
     const data = await api.createAccount(email, password);
     setUser({ userid: data.userid, email: data.emailadress });
     setShowCreateAccount(false);
   }
 
+  // Endpunkt hinzufuegen: URL normalisieren, speichern, Intervall setzen, Liste refreshen
   async function handleAddEndpoint(rawUrl, seconds) {
     const url = normalizeUrl(rawUrl);
     const data = await api.addEndpoint(user.userid, url);
@@ -134,6 +161,7 @@ function App() {
     setEndpoints(mapEndpoints(fresh));
   }
 
+  // Log-Modal oeffnen + Logs laden
   async function handleShowLog(i) {
     const ep = endpoints[i];
     setSelectedEndpoint(ep);
@@ -141,6 +169,7 @@ function App() {
     setShowLog(true);
   }
 
+  // Logs fetchen (wird auch vom Polling in LogModal verwendet)
   async function fetchLog(endpointid) {
     try {
       const entries = await api.getLog(endpointid);
@@ -150,12 +179,14 @@ function App() {
     }
   }
 
+  // Auto-Refresh fuer offene Logs (alle 5s)
   useEffect(() => {
     if (!showLog || !selectedEndpoint) return;
     const id = setInterval(() => fetchLog(selectedEndpoint.endpointid), 5000);
     return () => clearInterval(id);
   }, [showLog, selectedEndpoint]);
 
+  // Intervall-Modal vorbereiten
   function handleSetIntervall(i) {
     setSelectedEndpoint(endpoints[i]);
     setShowSetIntervall(true);
@@ -165,12 +196,14 @@ function App() {
     await api.setIntervall(endpointid, seconds);
   }
 
+  // URL-Edit-Modal vorbereiten
   function handleEditUrl(i) {
     setSelectedEndpoint(endpoints[i]);
     setEditUrlValue(endpoints[i].url);
     setShowEditUrl(true);
   }
 
+  // URL speichern: normalisieren + API + lokales State-Update
   async function handleSaveUrl() {
     const ep = selectedEndpoint;
     const url = normalizeUrl(editUrlValue);
@@ -178,11 +211,13 @@ function App() {
     setEndpoints(prev => prev.map(e => e.endpointid === ep.endpointid ? { ...e, url } : e));
   }
 
+  // Delete-Modal vorbereiten
   function handleRemove(i) {
     setDeleteIndex(i);
     setShowDeleteConfirm(true);
   }
 
+  // Endpunkt loeschen (nach Confirmation)
   async function confirmDelete() {
     const ep = endpoints[deleteIndex];
     await api.deleteEndpoint(ep.endpointid);
@@ -191,6 +226,8 @@ function App() {
     setDeleteIndex(null);
   }
 
+  // Einzelnen Endpunkt togglen (ON/OFF)
+  // Aktualisiert auch den mainSwitch-Status (alle an / alle aus)
   function handleToggleEndpoint(i) {
     setEndpoints(prev => {
       const next = prev.map((ep, j) => j === i ? { ...ep, active: !ep.active } : ep);
@@ -200,17 +237,20 @@ function App() {
     });
   }
 
+  // Passwort aendern
   async function handleChangePassword(oldPassword, newPassword) {
     const data = await api.changePassword(user.userid, oldPassword, newPassword);
     return data;
   }
 
+  // E-Mail aendern + lokalen State aktualisieren
   async function handleChangeEmail(newEmail) {
     const data = await api.changeEmail(user.userid, newEmail);
     setUser(prev => ({ ...prev, email: newEmail }));
     return data;
   }
 
+  // Account loeschen (mit Confirm-Bestätigung)
   async function handleDeleteAccount() {
     if (!window.confirm('Willst du deinen Account wirklich unwiderruflich löschen?')) return;
     await api.deleteAccount(user.userid);
@@ -219,11 +259,17 @@ function App() {
     setShowAccountSettings(false);
   }
 
+  // Logout: User-State zurücksetzen
   function handleLogout() {
     setUser(null);
     setEndpoints([]);
   }
 
+  // ════════════════════════════════════════════════════════════════
+  //  Render
+  // ════════════════════════════════════════════════════════════════
+
+  // Wenn nicht eingeloggt: LandingPage anzeigen (Login/Account erzeugen)
   if (!user) {
     return (
       <ThemeProvider>
@@ -233,6 +279,7 @@ function App() {
     );
   }
 
+  // Eingeloggt: Dashboard + alle Modals
   return (
     <ThemeProvider>
       <Dashboard
@@ -249,6 +296,7 @@ function App() {
         onAccountSettings={() => setShowAccountSettings(true)}
       />
 
+      {/* Modals – Conditional Rendering via isOpen-Prop */}
       <AddEndpointModal isOpen={showAddEndpoint} onClose={() => setShowAddEndpoint(false)} onSubmit={handleAddEndpoint} />
       <SetIntervallModal isOpen={showSetIntervall} onClose={() => setShowSetIntervall(false)} endpoint={selectedEndpoint} onSubmit={handleSetIntervallSubmit} />
       <DeleteConfirmModal isOpen={showDeleteConfirm} onClose={() => { setShowDeleteConfirm(false); setDeleteIndex(null); }} onConfirm={confirmDelete} />

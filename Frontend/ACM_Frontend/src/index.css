@@ -1,16 +1,22 @@
+// ─── Schriftarten ───
+// Space Mono: monospace-Schriftart mit terminal-ähnlichem Look
 @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
 
+// ─── Theme: LAVA RED ───
+// Standard-Theme. Jede Theme-Variable überschreibt die orange-Farben.
+// Der Benutzer wechselt via ThemeSwitcher zwischen lava/green/purple.
 :root[data-theme="lava"] {
   --color-orange-400: #f97316;
   --color-orange-500: #f97316;
   --color-orange-600: #ea580c;
   --color-orange-700: #c2410c;
   --color-orange-950: #431407;
-  --accent-glow: rgba(234,88,12,0.25);
-  --accent-bd: rgba(234,88,12,0.25);
-  --accent-bg: #ea580c;
+  --accent-glow: rgba(234,88,12,0.25);  // Leuchteffekt (box-shadow)
+  --accent-bd: rgba(234,88,12,0.25);    // Border-Farbe
+  --accent-bg: #ea580c;                 // Button-Hintergrund
 }
 
+// ─── Theme: HACKER GREEN ───
 :root[data-theme="green"] {
   --color-orange-400: #4ade80;
   --color-orange-500: #22c55e;
@@ -22,6 +28,7 @@
   --accent-bg: #16a34a;
 }
 
+// ─── Theme: VOID PURPLE ───
 :root[data-theme="purple"] {
   --color-orange-400: #a855f7;
   --color-orange-500: #a855f7;
@@ -33,15 +40,19 @@
   --accent-bg: #7c3aed;
 }
 
+// ─── Base-Styles ───
 body {
   margin: 0;
-  background: #030712;
-  font-family: 'Space Mono', monospace;
-  color: #e5e7eb;
+  background: #030712;        // Sehr dunkler Hintergrund (Fast-Schwarz)
+  font-family: 'Space Mono', monospace;  // Monospace-Schrift (Terminal-Look)
+  color: #e5e7eb;             // Helles Grau für Standardtext
 }
 
+// React-Mount-Point – volle Viewport-Höhe
 #root { min-height: 100vh; }
 
+// ─── Custom-Utilities ───
+// Entfernt die Pfeile bei number-Inputs (Chrome/Safari/Firefox)
 input.no-spinner::-webkit-inner-spin-button,
 input.no-spinner::-webkit-outer-spin-button {
   -webkit-appearance: none;
@@ -52,6 +63,9 @@ input.no-spinner[type="number"] {
   appearance: textfield;
 }
 
+// ─── Theme-Dynamic-Klassen ───
+// Diese Klassen werden in den Komponenten verwendet, um themenabhaengige Farben zu setzen.
+// [data-theme] Selektor: gilt fuer jedes gesetzte Theme (lava/green/purple)
 [data-theme] .ac-tx { color: var(--color-orange-600); }
 [data-theme] .ac-tx-hover { color: var(--color-orange-500); }
 [data-theme] .ac-tx-hover:hover { color: var(--color-orange-500); }

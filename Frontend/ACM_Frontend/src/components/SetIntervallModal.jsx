@@ -1,3 +1,6 @@
+// ─── SetIntervallModal – Check-Intervall einstellen ───
+// Formular mit Stunden/Minuten/Sekunden-Input.
+// App.hookt die endpointid in selectedEndpoint (uebergeben als prop).
 import { useState, useRef } from 'react';
 import Modal from './Modal';
 
@@ -32,6 +35,7 @@ function SetIntervallModal({ isOpen, onClose, endpoint, onSubmit }) {
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Set Intervall">
+      {/* Zeigt die URL des gewaehlten Endpunkts an */}
       {endpoint && <p className="text-gray-300 text-sm mb-4 truncate">{endpoint.url}</p>}
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-3 gap-3">
