@@ -33,6 +33,8 @@ build/
 secrets/
 
 # === Docker / DB-Volumes ===
+Dockerfile
+Dockerfile.*
 DB/data/
 DB/pgadmin/
 

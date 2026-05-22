@@ -1,22 +1,5 @@
-// ─── EndpointCard – Tabellenzeile für einen Endpunkt ───
-// Zeigt Status-LED, URL, Uptime, Intervall, Sparkline und Steuerungs-Buttons.
 import Sparkline from './Sparkline';
-
-// Formatierungsfunktion: Sekunden → "Xd HH:MM:SS" oder "XXmo Yd HH:MM"
-function fmtDuration(secs) {
-  if (secs == null) return '--:--:--';
-  const d = Math.floor(secs / 86400);
-  const h = Math.floor((secs % 86400) / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  const s = secs % 60;
-  if (d >= 30) {
-    const months = Math.floor(d / 30);
-    const days = d % 30;
-    return `${months}mo ${days}d ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
-  }
-  if (d > 0) return `${d}d ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-}
+import { fmtDuration } from '../utils/helpers';
 
 function EndpointCard({ endpoint, onRemove, onToggle, onSetIntervall, onShowLog, onEditUrl }) {
   // Status-Bestimmung

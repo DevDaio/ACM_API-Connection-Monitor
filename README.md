@@ -90,7 +90,9 @@ log (endpointid, status, statusdate, statustime)
 .
 ├── Backend/
 │   ├── src/
-│   │   ├── main.rs                 # Server, Router, CORS, Handler
+│   │   ├── main.rs                 # Server-Setup, Router, CORS, DB-Init
+│   │   ├── types.rs                # Request/Response-Structs + AppState
+│   │   ├── handlers.rs             # Alle Route-Handler (async fns)
 │   │   └── service_modules/
 │   │       ├── mod.rs
 │   │       └── async_services.rs   # Datenbank-Queries + Monitoring-Loop
@@ -99,10 +101,14 @@ log (endpointid, status, statusdate, statustime)
 │
 ├── Frontend/
 │   ├── src/
-│   │   ├── App.jsx                 # Haupt-App mit State-Management
+│   │   ├── App.jsx                 # Render-Template (State via useAppState-Hook)
 │   │   ├── api.js                  # API-Client
 │   │   ├── ThemeContext.jsx         # Theme-Provider
 │   │   ├── index.css               # Theme-Vars + Utility-Classes
+│   │   ├── hooks/
+│   │   │   └── useAppState.js      # Gesamtes State-Management + Handler
+│   │   ├── utils/
+│   │   │   └── helpers.js          # Format-Funktionen + URL-Normalisierung
 │   │   └── components/
 │   │       ├── LandingPage.jsx     # Hero + Login
 │   │       ├── Dashboard.jsx       # Hauptansicht

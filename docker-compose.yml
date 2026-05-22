@@ -1,0 +1,19 @@
+services:
+  db:
+    image: postgres:17
+    container_name: acm-db
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "5432:5432"
+    volumes:
+      - acm_pgdata:/var/lib/postgresql/data
+      - ./DB/createTables.sql:/docker-entrypoint-initdb.d/01-init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  acm_pgdata:
