@@ -13,7 +13,7 @@ Thumbs.db
 *.iml
 
 # === Rust / Cargo ===
-Backend/target/                 # Build-Artefakte von Cargo
+target/
 
 # === Node.js ===
 node_modules/
