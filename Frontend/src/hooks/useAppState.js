@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { api } from '../api';
+import { api, setToken } from '../api';
 import { normalizeUrl, mapEndpoints } from '../utils/helpers';
 
 export function useAppState() {
@@ -41,20 +41,32 @@ export function useAppState() {
   useEffect(() => { anyModalRef.current = anyModalOpen; }, [anyModalOpen]);
   useEffect(() => { return () => { if (pollRef.current) clearInterval(pollRef.current); }; }, []);
 
+  // Hilfsfunktion: Bei 401 (ungültiger Token) ausloggen
+  const handleAuthError = useCallback(() => {
+    if (!localStorage.getItem('acm_token')) {
+      setToken(null);
+      setUser(null);
+      setEndpoints([]);
+    }
+  }, []);
+
   const refreshEndpoints = useCallback(async () => {
     if (!user) return;
     try {
-      const d = await api.getHome(user.userid);
+      const d = await api.getHome();
       setEndpoints(mapEndpoints(d));
     } catch (e) {
       console.error('refreshEndpoints failed', e);
+      handleAuthError();
     }
-  }, [user]);
+  }, [user, handleAuthError]);
 
   useEffect(() => {
     if (!user) return;
-    api.getHome(user.userid).then(d => setEndpoints(mapEndpoints(d))).catch(console.error);
-  }, [user]);
+    api.getHome()
+      .then(d => setEndpoints(mapEndpoints(d)))
+      .catch(e => { console.error(e); handleAuthError(); });
+  }, [user, handleAuthError]);
 
   useEffect(() => {
     if (!user) return;
@@ -65,10 +77,12 @@ export function useAppState() {
     }, 1000);
     const poll = setInterval(() => {
       if (anyModalRef.current) return;
-      api.getHome(user.userid).then(d => setEndpoints(mapEndpoints(d))).catch(() => {});
+      api.getHome()
+        .then(d => setEndpoints(mapEndpoints(d)))
+        .catch(() => handleAuthError());
     }, 10000);
     return () => { clearInterval(tick); clearInterval(poll); };
-  }, [user]);
+  }, [user, handleAuthError]);
 
   const pollUntilReady = useCallback(() => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -92,6 +106,7 @@ export function useAppState() {
   }, []);
 
   const handleLogout = useCallback(() => {
+    setToken(null);
     setUser(null);
     setEndpoints([]);
   }, []);
@@ -115,11 +130,11 @@ export function useAppState() {
 
   const handleAddEndpoint = useCallback(async (rawUrl, seconds) => {
     const url = normalizeUrl(rawUrl);
-    const data = await api.addEndpoint(user.userid, url);
+    const data = await api.addEndpoint(url);
     await api.setIntervall(data.endpointid, seconds);
     await refreshEndpoints();
     pollUntilReady();
-  }, [user, refreshEndpoints, pollUntilReady]);
+  }, [refreshEndpoints, pollUntilReady]);
 
   const handleSetIntervall = useCallback((i) => {
     setSelectedEndpoint(endpoints[i]);
@@ -161,21 +176,22 @@ export function useAppState() {
   }, [selectedEndpoint, editUrlValue, refreshEndpoints, pollUntilReady]);
 
   const handleChangePassword = useCallback(async (oldPassword, newPassword) => {
-    return await api.changePassword(user.userid, oldPassword, newPassword);
-  }, [user]);
+    return await api.changePassword(oldPassword, newPassword);
+  }, []);
 
   const handleChangeEmail = useCallback(async (newEmail) => {
-    await api.changeEmail(user.userid, newEmail);
+    await api.changeEmail(newEmail);
     setUser(prev => ({ ...prev, email: newEmail }));
-  }, [user]);
+  }, []);
 
   const handleDeleteAccount = useCallback(async () => {
     if (!window.confirm('Willst du deinen Account wirklich unwiderruflich löschen?')) return;
-    await api.deleteAccount(user.userid);
+    await api.deleteAccount();
+    setToken(null);
     setUser(null);
     setEndpoints([]);
     setShowAccountSettings(false);
-  }, [user]);
+  }, []);
 
   const fetchLog = useCallback(async (endpointid) => {
     try {

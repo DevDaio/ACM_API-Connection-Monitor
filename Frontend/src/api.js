@@ -3,47 +3,73 @@
 // Fallback: '/acm' (wenn kein env gesetzt ist, z. B. im Dev-Mode)
 const BASE = (typeof import.meta !== 'undefined' && import.meta.env.VITE_API_URL) || '/acm';
 
-// Generische Request-Funktion: Methode, Pfad, optionaler JSON-Body
+// ─── Session-Token-Management ───
+// Wird beim Login/Registrieren gesetzt und bei 401 oder Logout gelöscht.
+let _token = localStorage.getItem('acm_token');
+
+export function setToken(t) {
+  _token = t;
+  if (t) localStorage.setItem('acm_token', t);
+  else localStorage.removeItem('acm_token');
+}
+
+// Token aus vorheriger Sitzung wiederherstellen (Page-Refresh überlebt)
+const savedToken = localStorage.getItem('acm_token');
+if (savedToken) _token = savedToken;
+
+// ─── Generische Request-Funktion ───
+// Hängt bei vorhandenem Token automatisch Authorization: Bearer an.
 async function request(method, path, body) {
   const opts = {
     method,
     headers: { 'Content-Type': 'application/json' },
   };
-  if (body) opts.body = JSON.stringify(body);  // POST/PUT-Body serialisieren
+  if (_token) opts.headers['Authorization'] = `Bearer ${_token}`;
+  if (body) opts.body = JSON.stringify(body);
+
   const res = await fetch(`${BASE}${path}`, opts);
   const data = await res.json();
-  // Nicht-2xx-Status => Fehler werfen (wird in den Komponenten gecatcht)
-  if (!res.ok) throw new Error(data.error || 'Request failed');
+
+  // Bei 401 (ungültiger/abgelaufener Token) Session löschen
+  if (!res.ok) {
+    if (res.status === 401) setToken(null);
+    throw new Error(data.error || 'Request failed');
+  }
   return data;
 }
 
 // ─── API-Funktionen ───
-// Jede Funktion ruft request() mit der passenden Methode + Pfad auf.
-// Die Pfad-Signaturen müssen mit den Backend-Routen uebereinstimmen.
+// userid wird nicht mehr mitgesendet – der Server extrahiert sie aus dem Token.
 export const api = {
   login: (email, password) =>
-    request('POST', '/login', { email, password }),
+    request('POST', '/login', { email, password }).then(data => {
+      setToken(data.token);
+      return data;
+    }),
 
   createAccount: (email, password) =>
-    request('POST', '/createAccount', { email, password }),
+    request('POST', '/createAccount', { email, password }).then(data => {
+      setToken(data.token);
+      return data;
+    }),
 
-  getHome: (userid) =>
-    request('GET', `/home?id=${userid}`),  // Query-Parameter: ?id=
+  getHome: () =>
+    request('GET', '/home'),
 
-  getUser: (userid) =>
-    request('GET', `/user?id=${userid}`),
+  getUser: () =>
+    request('GET', '/user'),
 
-  changePassword: (userid, oldPassword, newPassword) =>
-    request('PUT', '/user/changePassword', { userid, old_password: oldPassword, new_password: newPassword }),
+  changePassword: (oldPassword, newPassword) =>
+    request('PUT', '/user/changePassword', { old_password: oldPassword, new_password: newPassword }),
 
-  changeEmail: (userid, newEmail) =>
-    request('PUT', '/user/changeEmail', { userid, new_email: newEmail }),
+  changeEmail: (newEmail) =>
+    request('PUT', '/user/changeEmail', { new_email: newEmail }),
 
-  deleteAccount: (userid) =>
-    request('DELETE', '/user/deleteAccount', { userid }),
+  deleteAccount: () =>
+    request('DELETE', '/user/deleteAccount'),
 
-  addEndpoint: (userid, url) =>
-    request('PUT', '/addEndpoint', { userid, url }),
+  addEndpoint: (url) =>
+    request('PUT', '/addEndpoint', { url }),
 
   setIntervall: (endpointid, seconds) =>
     request('PUT', '/setIntervall', { endpointid, seconds }),

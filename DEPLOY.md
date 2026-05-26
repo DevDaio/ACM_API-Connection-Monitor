@@ -218,4 +218,12 @@ Optional: HTTPS via Let's Encrypt/Certbot einrichten.
 
 > **Hinweis:** In Produktion wird `VITE_API_URL` nicht gesetzt (Default `/acm`), und Nginx proxyt `/acm/*` an das Backend.
 
+## Session-Token (In-Memory)
+
+Die Session-Tokens werden im **Arbeitsspeicher** des Backends gehalten
+(HashMap in AppState, kein Redis/DB). Konsequenzen:
+
+- **Backend-Neustart** → alle Token verloren → alle User müssen sich einmal neu einloggen (Daten bleiben erhalten)
+- **Horizontales Scaling (mehrere Backend-Instanzen)** → nicht kompatibel (Token nur auf der Instanz gültig, auf der sie ausgestellt wurden)
+
 
