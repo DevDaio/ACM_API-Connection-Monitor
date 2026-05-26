@@ -5,6 +5,7 @@
 ## Features
 
 - **User-Accounts** — Registrierung + Login mit Passwort-Hashing (bcrypt)
+- **Session-Auth** — UUID-Token nach Login, geschützte Routen via `Authorization: Bearer`
 - **Endpoint-Verwaltung** — Endpunkte hinzufügen, bearbeiten, löschen
 - **Prüfintervalle** — Individuell pro Endpunkt (Sekunden/Minuten/Stunden)
 - **Automatisches Monitoring** — Hintergrund-Task pingt alle Endpunkte im definierten Intervall
@@ -58,21 +59,24 @@ open http://localhost:8080
 
 ## API-Routes
 
-| Methode | Route | Beschreibung |
-|---|---|---|
-| `GET` | `/acm` | Healthcheck |
-| `POST` | `/acm/login` | Login (Email + Passwort) |
-| `POST` | `/acm/createAccount` | Registrierung |
-| `GET` | `/acm/home?id=N` | Endpoints eines Users (mit Status) |
-| `GET` | `/acm/user?id=N` | User-Daten |
-| `PUT` | `/acm/user/changePassword` | Passwort ändern |
-| `PUT` | `/acm/user/changeEmail` | Email ändern |
-| `DELETE` | `/acm/user/deleteAccount` | Account löschen |
-| `PUT` | `/acm/addEndpoint` | Neuen Endpoint hinzufügen |
-| `PUT` | `/acm/updateEndpoint` | Endpoint-URL ändern |
-| `PUT` | `/acm/setIntervall` | Prüfintervall setzen |
-| `PUT` | `/acm/deleteConfirm` | Endpoint löschen |
-| `GET` | `/acm/log?id=N` | Log eines Endpoints |
+| Methode | Route | Auth | Beschreibung |
+|---|---|---|---|
+| `GET` | `/acm` | ❌ | Healthcheck |
+| `POST` | `/acm/login` | ❌ | Login (Email + Passwort) → Token |
+| `POST` | `/acm/createAccount` | ❌ | Registrierung → Token |
+| `GET` | `/acm/home` | ✅ Token | Eigene Endpoints (mit Status) |
+| `GET` | `/acm/user` | ✅ Token | Eigene User-Daten |
+| `PUT` | `/acm/user/changePassword` | ✅ Token | Passwort ändern |
+| `PUT` | `/acm/user/changeEmail` | ✅ Token | Email ändern |
+| `DELETE` | `/acm/user/deleteAccount` | ✅ Token | Account löschen |
+| `PUT` | `/acm/addEndpoint` | ✅ Token | Neuen Endpoint hinzufügen |
+| `PUT` | `/acm/updateEndpoint` | ✅ Token | Endpoint-URL ändern |
+| `PUT` | `/acm/setIntervall` | ✅ Token | Prüfintervall setzen |
+| `PUT` | `/acm/deleteConfirm` | ✅ Token | Endpoint löschen |
+| `GET` | `/acm/log?id=N` | ✅ Token | Log eines Endpoints |
+
+> **Auth:** Geschützte Routen benötigen `Authorization: Bearer <token>` im Header.
+> Der Token wird bei Login/Registrierung ausgestellt und gilt bis zum Backend-Neustart.
 
 ## Datenbank-Schema
 

@@ -1,14 +1,16 @@
 // ─── Shared State & Request/Response-Typen ───
-// Alle Datenstrukturen für den HTTP-Datenaustausch.
-// Deserialize: wird aus JSON-Request-Body geparst (von serde)
-// Serialize:   wird in JSON-Response umgewandelt
+// AppState: Wird per Arc an alle Handler weitergereicht
+// sessions: In-Memory-Map für Session-Token → userid
 
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
+use std::collections::HashMap;
+use std::sync::RwLock;
 
 // Shared State: Wird per Arc<AppState> an alle Handler weitergereicht
 pub struct AppState {
-    pub pool: PgPool, // PostgreSQL-Verbindungspool
+    pub pool: PgPool,
+    pub sessions: RwLock<HashMap<String, i32>>, // Session-Token → userid
 }
 
 // ─── Request-Structs (werden aus dem JSON-Body deserialisiert) ───
@@ -27,32 +29,27 @@ pub struct LoginReq {
 
 #[derive(Deserialize)]
 pub struct ChangePasswordReq {
-    pub userid: i32,
     pub old_password: String,
     pub new_password: String,
 }
 
 #[derive(Deserialize)]
 pub struct ChangeEmailReq {
-    pub userid: i32,
     pub new_email: String,
 }
 
-#[derive(Deserialize)]
-pub struct DeleteAccountReq {
-    pub userid: i32,
-}
+// Kein Body mehr nötig – userid wird aus dem Session-Token extrahiert
+// Siehe handle_delete_account
 
 #[derive(Deserialize)]
 pub struct AddEndpointReq {
-    pub userid: i32,
     pub url: String,
 }
 
 #[derive(Deserialize)]
 pub struct SetIntervallReq {
     pub endpointid: i32,
-    pub seconds: i32, // Check-Intervall in Sekunden
+    pub seconds: i32,
 }
 
 #[derive(Deserialize)]
@@ -66,7 +63,7 @@ pub struct UpdateEndpointReq {
     pub url: String,
 }
 
-// Query-Parameter für GET-Requests (z. B. /acm/home?userid=5)
+// Query-Parameter für GET-Requests (z. B. /acm/log?endpointid=5)
 #[derive(Deserialize)]
 pub struct IdParam {
     pub id: i32,
@@ -78,6 +75,7 @@ pub struct IdParam {
 pub struct LoginRes {
     pub userid: i32,
     pub emailadress: String,
+    pub token: String, // Session-Token für nachfolgende Requests
 }
 
 #[derive(Serialize)]

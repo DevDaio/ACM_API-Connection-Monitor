@@ -28,3 +28,5 @@ chrono = { version = "0.4", features = ["serde"] }
 tower = "0.5"
 # reqwest: HTTP-Client für den Monitoring-Loop (pingt Endpunkte)
 reqwest = "0.12"
+# uuid: Zufällige Session-Token generieren
+uuid = { version = "1", features = ["v4"] }

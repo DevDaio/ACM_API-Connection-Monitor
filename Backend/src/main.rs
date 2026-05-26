@@ -9,7 +9,8 @@ use axum::{
     routing::{delete, get, post, put},
     Router,
 };
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
 use tower_http::cors::{Any, CorsLayer};
 use sqlx::postgres::PgPoolOptions;
 
@@ -63,7 +64,11 @@ async fn main() -> Result<(), sqlx::Error> {
 
     // ─── AppState (Shared State) für Axum ───
     // Arc = Thread-sicherer Referenzzähler – alle Handler teilen sich denselben Pool
-    let state = Arc::new(AppState { pool });
+    // sessions = In-Memory-Session-Speicher (token → userid)
+    let state = Arc::new(AppState {
+        pool,
+        sessions: RwLock::new(HashMap::new()),
+    });
 
     // ─── CORS-Konfiguration ───
     // Erlaubt Anfragen von beliebigen Origins (Any) – für Entwicklung/Frontend

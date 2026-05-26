@@ -6,7 +6,7 @@ kanban-plugin: board
 
 ## To-Do
 
-- [ ] Authentifizierung von Front zu Backend
+- [x] Authentifizierung von Front zu Backend (Session-Token via Authorization-Header)
 - [ ] Fehlerhandling einbauen
 
 
