@@ -142,6 +142,67 @@ log (endpointid, status, statusdate, statustime, url, check_type)  # status/url/
 └── .env                            # Konfiguration
 ```
 
+## Reference
+
+### API Routes → Handler → Frontend
+
+| Methode | Route | Auth | Handler | Frontend-Aufruf |
+|---|---|---|---|---|
+| `GET` | `/acm` | ❌ | `handle_healthcheck()` | — |
+| `POST` | `/acm/login` | ❌ | `handle_login()` | `api.login()` |
+| `POST` | `/acm/createAccount` | ❌ | `handle_create_account()` | `api.createAccount()` |
+| `GET` | `/acm/home` | ✅ | `handle_home()` | `api.getHome()` |
+| `GET` | `/acm/user` | ✅ | `handle_user()` | `api.getUser()` |
+| `PUT` | `/acm/user/changePassword` | ✅ | `handle_change_password()` | `api.changePassword()` |
+| `PUT` | `/acm/user/changeEmail` | ✅ | `handle_change_email()` | `api.changeEmail()` |
+| `DELETE` | `/acm/user/deleteAccount` | ✅ | `handle_delete_account()` | `api.deleteAccount()` |
+| `PUT` | `/acm/addEndpoint` | ✅ | `handle_add_endpoint()` | `api.addEndpoint()` |
+| `PUT` | `/acm/updateEndpoint` | ❌ | `handle_update_endpoint()` | `api.updateEndpoint()` |
+| `PUT` | `/acm/setIntervall` | ❌ | `handle_set_intervall()` | `api.setIntervall()` |
+| `PUT` | `/acm/deleteConfirm` | ❌ | `handle_delete_endpoint()` | `api.deleteEndpoint()` |
+| `GET` | `/acm/log?id=N` | ❌ | `handle_log()` | `api.getLog()` |
+
+### DB Tables → CREATE → Queries
+
+| Tabelle | CREATE (main.rs) | Wichtige Queries (async_services.rs) |
+|---|---|---|
+| `"user"` | `main.rs:46` | `create_account()` · `get_user_by_email()` · `get_user_by_id()` · `change_password()` · `change_email()` · `delete_account()` |
+| `endpoint` | `main.rs:47` (+ Migration `main.rs:56`) | `add_endpoint()` · `update_endpoint()` · `delete_endpoint()` · `get_user_endpoints()` (JOIN) |
+| `userendpoint` | `main.rs:48` | `add_endpoint()` · `delete_endpoint()` |
+| `intervall` | `main.rs:49` | `set_intervall()` · `get_endpoints_with_intervals()` |
+| `log` | `main.rs:50` (+ Migration `main.rs:58`) | `insert_log()` · `get_log()` |
+
+### Monitoring – Check-Methoden
+
+| Methode | Funktion | Datei:Zeile | Protokoll |
+|---|---|---|---|
+| HTTP | `client.get().send().await` | `async_services.rs:431` | HTTP GET → 2xx? |
+| TCP | `tcp_ping()` | `async_services.rs:339` | TCP-Verbindung (5s Timeout) |
+| ICMP | `icmp_ping()` | `async_services.rs:358` | System `ping -c1 -W3` |
+
+### Schlüssel-Types
+
+| Type | File | Beschreibung |
+|---|---|---|
+| `AppState` | `types.rs:11` | Shared State (PgPool + Session-HashMap) |
+| `EndpointExtended` | `async_services.rs:62` | Dashboard-Response (URL, Status, Sparkline, Intervall) |
+| `EndpointInterval` | `async_services.rs:310` | Endpunkt + Intervall für Monitoring-Loop |
+| `Log` | `async_services.rs:28` | Log-Eintrag (Status + Datum + URL + check_type) |
+
+### Schlüssel-Komponenten (Frontend)
+
+| Komponente | File | Aufgabe |
+|---|---|---|
+| `Dashboard` | `Dashboard.jsx` | Haupttabelle mit EndpointCards |
+| `EndpointCard` | `EndpointCard.jsx` | Eine Zeile (Status-LED, URL, Badge, Buttons) |
+| `AddEndpointModal` | `AddEndpointModal.jsx` | URL + check_type + Intervall eingeben |
+| `EditUrlModal` | `EditUrlModal.jsx` | URL + check_type bearbeiten |
+| `LogModal` | `LogModal.jsx` | Log-Tabelle mit Filter (Status + Methode + Datum) |
+| `Modal` | `Modal.jsx` | Basis-Overlay (wide-Prop für Log) |
+| `useAppState` | `hooks/useAppState.js` | Zentraler State + alle Callback-Handler |
+| `api` | `api.js` | HTTP-Client mit Token-Management |
+| `helpers` | `utils/helpers.js` | `normalizeUrl()`, `mapEndpoints()`, `fmtDuration()` |
+
 ## Deployment
 
 Siehe [DEPLOY.md](DEPLOY.md) für AWS RDS + EC2 Step-by-Step und Umgebungsvariablen.
