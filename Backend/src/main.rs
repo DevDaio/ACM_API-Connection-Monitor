@@ -59,7 +59,7 @@ async fn main() -> Result<(), sqlx::Error> {
     println!("Tables ready");
 
     // ─── Hintergrund-Monitoring-Loop starten ───
-    // Läuft in einem separaten Tokio-Task und pingt Endpunkte im konfigurierten Intervall
+    // Läuft in einem separaten Tokio-Task und prüft Endpunkte (HTTP/TCP/ICMP) im konfigurierten Intervall
     let monitor_pool = pool.clone();
     tokio::spawn(async move {
         crate::service_modules::async_services::run_monitoring_loop(monitor_pool).await;

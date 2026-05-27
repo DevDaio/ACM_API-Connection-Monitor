@@ -41,7 +41,7 @@ export function useAppState() {
   useEffect(() => { anyModalRef.current = anyModalOpen; }, [anyModalOpen]);
   useEffect(() => { return () => { if (pollRef.current) clearInterval(pollRef.current); }; }, []);
 
-  // Hilfsfunktion: Bei 401 (ungültiger Token) ausloggen
+  // Hilfsfunktion: Wenn kein Token mehr vorhanden, Benutzer ausloggen
   const handleAuthError = useCallback(() => {
     if (!localStorage.getItem('acm_token')) {
       setToken(null);

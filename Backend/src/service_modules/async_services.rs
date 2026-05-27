@@ -120,7 +120,7 @@ pub async fn get_user_endpoints(pool: &PgPool, userid: i32) -> Result<Vec<Endpoi
 // ════════════════════════════════════════════════════════════════
 
 // Holt einen User anhand der userid (Primärschlüssel).
-// Panickt (via fetch_one), wenn die ID nicht existiert.
+// Gibt Err(sqlx::Error::RowNotFound) zurück, wenn die ID nicht existiert.
 pub async fn get_user_by_id(pool: &PgPool, userid: i32) -> Result<User, sqlx::Error> {
     let user = sqlx::query_as::<_, User>(
         "SELECT * FROM \"user\" WHERE userid = $1"
@@ -255,8 +255,8 @@ pub async fn set_intervall(pool: &PgPool, endpointid: i32, seconds: i32) -> Resu
 
 // Löscht einen Endpunkt und alle abhängigen Daten.
 // Reihenfolge wichtig: log -> intervall -> userendpoint -> endpoint
-// (Fremdschluessel-Constraints verhindern, dass ein endpoint geloescht wird,
-//  solange noch abhaengige Zeilen in anderen Tabellen existieren)
+// (ON DELETE CASCADE an den FK-Constraints würde automatisch löschen,
+//  dennoch wird explizit in Reihenfolge gelöscht für Klarheit)
 pub async fn delete_endpoint(pool: &PgPool, endpointid: i32) -> Result<PgQueryResult, sqlx::Error> {
     // Zuerst Logs löschen (abhängige Zeilen)
     sqlx::query("DELETE FROM log WHERE endpointid = $1")

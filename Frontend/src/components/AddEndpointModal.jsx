@@ -1,5 +1,5 @@
 // ─── AddEndpointModal – Neuen Endpunkt hinzufügen ───
-// Formular mit URL-Eingabe + Intervall (HH:MM:SS) + Check-Typ (HTTP/ICMP).
+// Formular mit URL-Eingabe + Intervall (HH:MM:SS) + Check-Typ (HTTP/TCP/ICMP).
 import { useState, useRef } from 'react';
 import Modal from './Modal';
 

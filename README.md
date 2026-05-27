@@ -70,7 +70,7 @@ open http://localhost:8080
 | `PUT` | `/acm/user/changeEmail` | ✅ Token | Email ändern |
 | `DELETE` | `/acm/user/deleteAccount` | ✅ Token | Account löschen |
 | `PUT` | `/acm/addEndpoint` | ✅ Token | Neuen Endpoint hinzufügen (Body: `url`, `check_type`=http\|tcp\|icmp) |
-| `PUT` | `/acm/updateEndpoint` | ❌ | Endpoint-URL ändern (Body: `url`, `check_type` optional) |
+| `PUT` | `/acm/updateEndpoint` | ❌ | Endpoint-URL ändern (Body: `endpointid`, `url`, `check_type` optional) |
 | `PUT` | `/acm/setIntervall` | ❌ | Prüfintervall setzen |
 | `PUT` | `/acm/deleteConfirm` | ❌ | Endpoint löschen |
 | `GET` | `/acm/log?id=N` | ❌ | Log eines Endpoints |

@@ -1,6 +1,7 @@
 // ─── Axum-Handler: Jede Funktion bearbeitet eine HTTP-Route ───
 // Öffentliche Routen: healthcheck, login, createAccount
-// Geschützte Routen: alle anderen – erfordern Session-Token im Authorization-Header
+// Geschützte Routen: die meisten – erfordern Session-Token im Authorization-Header
+// Ausnahmen (kein Auth): setIntervall, deleteConfirm, updateEndpoint, log
 
 use axum::{
     extract::{State, Query},
@@ -373,7 +374,7 @@ pub async fn handle_delete_endpoint(
     Ok(Json(serde_json::json!({ "status": "ok" })))
 }
 
-// GET /acm/log?endpointid=<id> – Log-Einträge für einen Endpoint abrufen
+// GET /acm/log?id=<id> – Log-Einträge für einen Endpoint abrufen
 pub async fn handle_log(
     State(state): State<Arc<AppState>>,
     Query(params): Query<IdParam>,
