@@ -14,7 +14,7 @@ import './App.css';
 
 function App() {
   const {
-    user, endpoints, mainSwitch,
+    user, endpoints,
     showCreateAccount, setShowCreateAccount,
     showAddEndpoint, setShowAddEndpoint,
     showSetIntervall, setShowSetIntervall,
@@ -26,7 +26,6 @@ function App() {
     showEditUrl, setShowEditUrl,
     editUrlValue, setEditUrlValue,
     handleLogin, handleCreateAccount, handleLogout,
-    handleToggleMainSwitch, handleToggleEndpoint,
     handleAddEndpoint,
     handleSetIntervall, handleSetIntervallSubmit,
     handleRemove, confirmDelete,
@@ -35,37 +34,34 @@ function App() {
     handleShowLog,
   } = useAppState();
 
-  if (!user) {
-    return (
-      <ThemeProvider>
-        <LandingPage onLogin={handleLogin} onCreateAccount={() => setShowCreateAccount(true)} />
-        <CreateAccountModal isOpen={showCreateAccount} onClose={() => setShowCreateAccount(false)} onSubmit={handleCreateAccount} />
-      </ThemeProvider>
-    );
-  }
-
   return (
     <ThemeProvider>
-      <Dashboard
-        endpoints={endpoints}
-        mainSwitch={mainSwitch}
-        onToggleMainSwitch={handleToggleMainSwitch}
-        onRemove={handleRemove}
-        onToggleEndpoint={handleToggleEndpoint}
-        onSetIntervall={handleSetIntervall}
-        onShowLog={handleShowLog}
-        onEditUrl={handleEditUrl}
-        onAddEndpoint={() => setShowAddEndpoint(true)}
-        onLogout={handleLogout}
-        onAccountSettings={() => setShowAccountSettings(true)}
-      />
+      {!user ? (
+        <>
+          <LandingPage onLogin={handleLogin} onCreateAccount={() => setShowCreateAccount(true)} />
+          <CreateAccountModal isOpen={showCreateAccount} onClose={() => setShowCreateAccount(false)} onSubmit={handleCreateAccount} />
+        </>
+      ) : (
+        <>
+          <Dashboard
+            endpoints={endpoints}
+            onRemove={handleRemove}
+            onSetIntervall={handleSetIntervall}
+            onShowLog={handleShowLog}
+            onEditUrl={handleEditUrl}
+            onAddEndpoint={() => setShowAddEndpoint(true)}
+            onLogout={handleLogout}
+            onAccountSettings={() => setShowAccountSettings(true)}
+          />
 
-      <AddEndpointModal isOpen={showAddEndpoint} onClose={() => setShowAddEndpoint(false)} onSubmit={handleAddEndpoint} />
-      <SetIntervallModal isOpen={showSetIntervall} onClose={() => setShowSetIntervall(false)} endpoint={selectedEndpoint} onSubmit={handleSetIntervallSubmit} />
-      <DeleteConfirmModal isOpen={showDeleteConfirm} onClose={() => { setShowDeleteConfirm(false); setDeleteIndex(null); }} onConfirm={confirmDelete} />
-      <AccountSettingsModal isOpen={showAccountSettings} onClose={() => setShowAccountSettings(false)} onChangePassword={handleChangePassword} onChangeEmail={handleChangeEmail} onDeleteAccount={handleDeleteAccount} />
-      <LogModal isOpen={showLog} onClose={() => setShowLog(false)} entries={logEntries} />
-      <EditUrlModal isOpen={showEditUrl} onClose={() => setShowEditUrl(false)} endpoint={selectedEndpoint} value={editUrlValue} onChange={setEditUrlValue} onSave={handleSaveUrl} />
+          <AddEndpointModal isOpen={showAddEndpoint} onClose={() => setShowAddEndpoint(false)} onSubmit={handleAddEndpoint} />
+          <SetIntervallModal isOpen={showSetIntervall} onClose={() => setShowSetIntervall(false)} endpoint={selectedEndpoint} onSubmit={handleSetIntervallSubmit} />
+          <DeleteConfirmModal isOpen={showDeleteConfirm} onClose={() => { setShowDeleteConfirm(false); setDeleteIndex(null); }} onConfirm={confirmDelete} />
+          <AccountSettingsModal isOpen={showAccountSettings} onClose={() => setShowAccountSettings(false)} onChangePassword={handleChangePassword} onChangeEmail={handleChangeEmail} onDeleteAccount={handleDeleteAccount} />
+          <LogModal isOpen={showLog} onClose={() => setShowLog(false)} entries={logEntries} />
+          <EditUrlModal isOpen={showEditUrl} onClose={() => setShowEditUrl(false)} endpoint={selectedEndpoint} value={editUrlValue} onChange={setEditUrlValue} onSave={handleSaveUrl} />
+        </>
+      )}
     </ThemeProvider>
   );
 }

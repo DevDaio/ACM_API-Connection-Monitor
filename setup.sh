@@ -6,7 +6,7 @@ echo "╔═══════════════════════�
 echo "║   ACM API Connection Monitor — Setup    ║"
 echo "╚══════════════════════════════════════════╝"
 
-# ─── Pruefen, ob benoetigte Tools installiert sind ───
+# ─── Prüfen, ob benötigte Tools installiert sind ───
 command -v cargo >/dev/null 2>&1 || { echo "❌ Rust/Cargo fehlt"; exit 1; }
 command -v npm  >/dev/null 2>&1 || { echo "❌ Node.js/npm fehlt"; exit 1; }
 
@@ -77,7 +77,11 @@ echo "✅ Backend gebaut"
 echo ""
 echo "→ Frontend bauen …"
 cd Frontend
-npm ci                    # Installiert exakte Dependencies
+if [ -f package-lock.json ]; then
+  npm ci                    # Installiert exakte Dependencies
+else
+  npm install               # Fallback, falls kein lockfile existiert
+fi
 npm run build             # Vite-Produktions-Build
 cd ..
 echo "✅ Frontend gebaut"

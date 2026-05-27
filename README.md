@@ -48,7 +48,7 @@ cargo run
 **3. Frontend starten (zweites Terminal)**
 ```bash
 cd Frontend
-npm install
+npm ci
 npm run dev
 ```
 
@@ -70,10 +70,10 @@ open http://localhost:8080
 | `PUT` | `/acm/user/changeEmail` | ✅ Token | Email ändern |
 | `DELETE` | `/acm/user/deleteAccount` | ✅ Token | Account löschen |
 | `PUT` | `/acm/addEndpoint` | ✅ Token | Neuen Endpoint hinzufügen (Body: `url`, `check_type`=http\|tcp\|icmp) |
-| `PUT` | `/acm/updateEndpoint` | ❌ | Endpoint-URL ändern (Body: `endpointid`, `url`, `check_type` optional) |
-| `PUT` | `/acm/setIntervall` | ❌ | Prüfintervall setzen |
-| `PUT` | `/acm/deleteConfirm` | ❌ | Endpoint löschen |
-| `GET` | `/acm/log?id=N` | ❌ | Log eines Endpoints |
+| `PUT` | `/acm/updateEndpoint` | ✅ Token | Endpoint-URL ändern (Body: `endpointid`, `url`, `check_type` optional) |
+| `PUT` | `/acm/setIntervall` | ✅ Token | Prüfintervall setzen |
+| `PUT` | `/acm/deleteConfirm` | ✅ Token | Endpoint löschen |
+| `GET` | `/acm/log?id=N` | ✅ Token | Log eines Endpoints |
 
 > **Auth:** Geschützte Routen benötigen `Authorization: Bearer <token>` im Header.
 > Der Token wird bei Login/Registrierung ausgestellt und gilt bis zum Backend-Neustart.
@@ -101,7 +101,8 @@ log (endpointid, status, statusdate, statustime, url, check_type)  # status/url/
 │   │       ├── mod.rs
 │   │       └── async_services.rs   # Datenbank-Queries + Monitoring-Loop
 │   ├── Cargo.toml
-│   └── Cargo.lock
+│   ├── Cargo.lock
+│   └── Dockerfile                   # Multi-Stage Rust-Build
 │
 ├── Frontend/
 │   ├── src/
@@ -111,6 +112,7 @@ log (endpointid, status, statusdate, statustime, url, check_type)  # status/url/
 │   │   ├── api.js                  # API-Client
 │   │   ├── ThemeContext.jsx         # Theme-Provider
 │   │   ├── index.css               # Theme-Vars + Utility-Classes
+│   │   ├── assets/                 # Statische Assets
 │   │   ├── hooks/
 │   │   │   └── useAppState.js      # Gesamtes State-Management + Handler
 │   │   ├── utils/
@@ -133,12 +135,20 @@ log (endpointid, status, statusdate, statustime, url, check_type)  # status/url/
 │   ├── index.html
 │   ├── package.json
 │   ├── vite.config.js
-│   └── eslint.config.js
+│   ├── eslint.config.js
+│   ├── Dockerfile                  # Production-Build + nginx
+│   └── nginx.conf                  # Reverse-Proxy für /acm → Backend
 │
-├── DB/createTables.sql             # DB-Init
+├── DB/
+│   ├── createTables.sql            # DB-Init
+│   └── data/                       # DB-Daten (lokal, gitignored)
 │
 ├── setup.sh                        # Ein-Klick-Build
+├── start-dev.sh                    # Backend + Frontend parallel starten
+├── docker-compose.yml              # Postgres + Backend + Frontend
 ├── DEPLOY.md                       # AWS-Deployment-Anleitung
+├── To-Do.md                        # Projekt-Tracking
+├── explain-canvas.md               # Architektur-Diagramme
 └── .env                            # Konfiguration
 ```
 
@@ -157,10 +167,10 @@ log (endpointid, status, statusdate, statustime, url, check_type)  # status/url/
 | `PUT` | `/acm/user/changeEmail` | ✅ | `handle_change_email()` | `api.changeEmail()` |
 | `DELETE` | `/acm/user/deleteAccount` | ✅ | `handle_delete_account()` | `api.deleteAccount()` |
 | `PUT` | `/acm/addEndpoint` | ✅ | `handle_add_endpoint()` | `api.addEndpoint()` |
-| `PUT` | `/acm/updateEndpoint` | ❌ | `handle_update_endpoint()` | `api.updateEndpoint()` |
-| `PUT` | `/acm/setIntervall` | ❌ | `handle_set_intervall()` | `api.setIntervall()` |
-| `PUT` | `/acm/deleteConfirm` | ❌ | `handle_delete_endpoint()` | `api.deleteEndpoint()` |
-| `GET` | `/acm/log?id=N` | ❌ | `handle_log()` | `api.getLog()` |
+| `PUT` | `/acm/updateEndpoint` | ✅ | `handle_update_endpoint()` | `api.updateEndpoint()` |
+| `PUT` | `/acm/setIntervall` | ✅ | `handle_set_intervall()` | `api.setIntervall()` |
+| `PUT` | `/acm/deleteConfirm` | ✅ | `handle_delete_endpoint()` | `api.deleteEndpoint()` |
+| `GET` | `/acm/log?id=N` | ✅ | `handle_log()` | `api.getLog()` |
 
 ### DB Tables → CREATE → Queries
 
@@ -176,9 +186,9 @@ log (endpointid, status, statusdate, statustime, url, check_type)  # status/url/
 
 | Methode | Funktion | Datei:Zeile | Protokoll |
 |---|---|---|---|
-| HTTP | `client.get().send().await` | `async_services.rs:431` | HTTP GET → 2xx? |
-| TCP | `tcp_ping()` | `async_services.rs:339` | TCP-Verbindung (5s Timeout) |
-| ICMP | `icmp_ping()` | `async_services.rs:358` | System `ping -c1 -W3` |
+| HTTP | `client.get().send().await` | `async_services.rs:422` | HTTP GET → 2xx? (5s Timeout) |
+| TCP | `tcp_ping()` | `async_services.rs:334` | TCP-Verbindung (5s Timeout) |
+| ICMP | `icmp_ping()` | `async_services.rs:354` | System `ping -c1 -W3` |
 
 ### Schlüssel-Types
 
@@ -186,7 +196,7 @@ log (endpointid, status, statusdate, statustime, url, check_type)  # status/url/
 |---|---|---|
 | `AppState` | `types.rs:11` | Shared State (PgPool + Session-HashMap) |
 | `EndpointExtended` | `async_services.rs:62` | Dashboard-Response (URL, Status, Sparkline, Intervall) |
-| `EndpointInterval` | `async_services.rs:310` | Endpunkt + Intervall für Monitoring-Loop |
+| `EndpointInterval` | `async_services.rs:313` | Endpunkt + Intervall für Monitoring-Loop |
 | `Log` | `async_services.rs:28` | Log-Eintrag (Status + Datum + URL + check_type) |
 
 ### Schlüssel-Komponenten (Frontend)

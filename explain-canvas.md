@@ -218,11 +218,6 @@ sequenceDiagram
     Note over BE: Extrahiert Token aus Header → Sitzungen HashMap → Nutzer-ID
 
     BE->>AS: add_endpoint(&pool, Nutzer-ID, &URL)
-    AS->>DB: SELECT COUNT(*) FROM endpoint
-    DB-->>AS: Anzahl
-    alt Anzahl == 0
-        AS->>DB: ALTER TABLE endpoint ALTER COLUMN endpointid RESTART WITH 1
-    end
     AS->>DB: INSERT INTO endpoint (url, check_type) VALUES ($1, $2) RETURNING endpointid
     DB-->>AS: Endpunkt-ID
     AS->>DB: INSERT INTO userendpoint (Nutzer-ID, Endpunkt-ID) VALUES ($1, $2)
@@ -255,7 +250,6 @@ sequenceDiagram
 
 **Wichtige Details:**
 - `normalizeUrl()` erkennt: `http://`, `https://`, `localhost`, IPv4, IPv6, und fügt `https://` als Standard hinzu
-- Beim ersten Endpunkt wird die Sequenz zurückgesetzt (`RESTART WITH 1`)
 - `setIntervall` verwendet **UPSERT** (`ON CONFLICT DO UPDATE`)
 - Nach dem Hinzufügen: **Abfragen** mit 8 Versuchen alle 2 Sekunden (max. 16s) bis Daten aktuell
 
@@ -265,57 +259,41 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    START(["tokio::spawn (Hintergrund-Task)"]) --> BUILD["reqwest::Client::builder()<br/>.timeout(10s)<br/>.danger_accept_invalid_certs(true)"]
+    START(["tokio::spawn (Hintergrund-Task)"]) --> BUILD["reqwest::Client::builder()<br/>.timeout(5s)<br/>.danger_accept_invalid_certs(true)"]
     BUILD --> SCHLEIFE
 
-    subgraph SCHLEIFE ["Hauptschleife (alle 5 Sekunden)"]
-        ABFR["SELECT i.endpointid, i.seconds, e.url, e.check_type<br/>FROM intervall i JOIN endpoint e<br/>ON e.endpointid = i.endpointid"]
+    subgraph SCHLEIFE ["Hauptschleife (alle 1 Sekunde)"]
+        ABFR["SELECT i.endpointid, i.seconds, e.url, e.check_type<br/>FROM intervall i JOIN endpoint e"]
         ABFR --> FEHLER{"DB-Fehler?"}
         FEHLER -->|"Ja"| FEHLER_LOG["eprintln + 10s schlafen"]
         FEHLER_LOG --> SCHLAF
 
-        FEHLER -->|"Nein"| FUER_JEDEN["Für jeden Endpunkt"]
+        FEHLER -->|"Nein"| FILTER["Fällige Endpoints filtern<br/>(last_checked lesen)"]
+        FILTER --> JOIN_ALL["⚡ join_all()<br/>Alle fälligen Checks parallel"]
 
-        FUER_JEDEN --> LETZTER_CHECK{"last_checked.get(&ep.endpointid)?"}
-        LETZTER_CHECK -->|"None (noch nie)"| PING["🟟 Sofort prüfen"]
-        LETZTER_CHECK -->|"Some(Letzter)"| ABGELAUFEN{"last.elapsed() >=<br/>ep.seconds?"}
-        ABGELAUFEN -->|"Nein (noch nicht fällig)"| UEBERSPRING["⏭ Überspringen"]
-        UEBERSPRING --> NAECHSTER["Nächster Endpunkt"]
-
-        ABGELAUFEN -->|"Ja"| PING
-
-        PING --> CHECK_TYPE{"check_type?"}
-        CHECK_TYPE -->|"http"| HTTP_GET["reqwest::get(&ep.url)"]
-        CHECK_TYPE -->|"tcp"| TCP["TcpStream::connect(addr)"]
+        JOIN_ALL --> CHECK_TYPE{"check_type?"}
+        CHECK_TYPE -->|"http"| HTTP_GET["reqwest::get(&url) timeout:5s"]
+        CHECK_TYPE -->|"tcp"| TCP["TcpStream::connect(addr) timeout:5s"]
         CHECK_TYPE -->|"icmp"| ICMP["system ping -c1 -W3 host"]
         HTTP_GET --> HTTP_OK{"2xx?"}
-        HTTP_OK -->|"Ja"| UP
-        HTTP_OK -->|"Nein/Err"| DOWN
+        HTTP_OK -->|"Ja"| STATUS_UP["status = true"]
+        HTTP_OK -->|"Nein/Err"| STATUS_DOWN["status = false"]
         TCP --> TCP_OK{"Connected?"}
-        TCP_OK -->|"Ja"| UP
-        TCP_OK -->|"Nein"| DOWN
+        TCP_OK -->|"Ja"| STATUS_UP
+        TCP_OK -->|"Nein"| STATUS_DOWN
         ICMP --> ICMP_OK{"Exit 0?"}
-        ICMP_OK -->|"Ja"| UP
-        ICMP_OK -->|"Nein"| DOWN
+        ICMP_OK -->|"Ja"| STATUS_UP
+        ICMP_OK -->|"Nein"| STATUS_DOWN
 
-        UP --> EINFUEG["INSERT INTO log (endpointid, status, url, check_type)<br/>VALUES ($1, $2, $3, $4)"]
-        DOWN --> EINFUEG
-
-        EINFUEG --> EINFUEG_FEHLER{"Einfügen-Fehler?"}
-        EINFUEG_FEHLER -->|"Ja"| LOG_FEHLER["eprintln Log-Einfügen-Fehler"]
-        EINFUEG_FEHLER -->|"Nein"| AKTUALISIEREN["last_checked.insert(ep.endpointid, Instant::now())"]
-        LOG_FEHLER --> AKTUALISIEREN
-        AKTUALISIEREN --> NAECHSTER
-        NAECHSTER --> ALLE_DURCH{"Alle durch?"}
-        ALLE_DURCH -->|"Nein"| FUER_JEDEN
-        ALLE_DURCH -->|"Ja"| SCHLAF["tokio::time::sleep(5s)"]
+        STATUS_UP --> LOGGEN["INSERT INTO log × N<br/>+ last_checked × N<br/>(sequentiell nach join_all)"]
+        STATUS_DOWN --> LOGGEN
+        LOGGEN --> SCHLAF["tokio::time::sleep(1s)"]
     end
 
     SCHLAF --> ABFR
 
     style START fill:#5c2d91,color:#fff
     style SCHLEIFE fill:#1e3a5f,color:#fff
-    style PING fill:#8b4513,color:#fff
     style UP fill:#1a5c1a,color:#fff
     style DOWN fill:#8b0000,color:#fff
 ```
@@ -324,10 +302,10 @@ flowchart TD
 
 | Aspekt | Wert |
 |--------|------|
-| Schleifen-Takt | 5 Sekunden (fest) |
+| Schleifen-Takt | 1 Sekunde (fest) |
 | Individuelles Intervall | Pro Endpunkt konfigurierbar in `intervall.seconds` |
 | Check-Typen | `http` (HTTP-GET), `tcp` (TCP-Verbindung), `icmp` (ICMP-Ping) |
-| HTTP-Zeitüberschreitung | 10 Sekunden |
+| HTTP-Zeitüberschreitung | 5 Sekunden |
 | TCP-Zeitüberschreitung | 5 Sekunden |
 | SSL | Selbst-signierte Zertifikate erlaubt (`danger_accept_invalid_certs(true)`) |
 | Log-Format | `endpointid, status (bool/NULL), url, statusdate DATE, statustime TIME` |

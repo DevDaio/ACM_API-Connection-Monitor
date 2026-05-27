@@ -25,7 +25,7 @@ function LogModal({ isOpen, onClose, entries }) {
     }
 
     if (dateFilter) {
-      list = list.filter(e => (e.statusdate || e.date || '').startsWith(dateFilter));
+      list = list.filter(e => (e.statusdate || '').startsWith(dateFilter));
     }
     return list;
   }, [entries, filter, methodFilter, dateFilter]);
@@ -100,7 +100,7 @@ function LogModal({ isOpen, onClose, entries }) {
                         </>
                       )}
                     </td>
-                    <td className="py-2 pr-4 font-mono whitespace-nowrap">{(entry.statustime || entry.time || '').split('.').shift()}</td>
+                    <td className="py-2 pr-4 font-mono whitespace-nowrap">{entry.statustime.split('.').shift()}</td>
                     <td className="py-2 pr-4 whitespace-nowrap">
                       {entry.check_type === 'icmp' ? (
                         <span className="text-cyan-400 text-xs font-mono font-bold border border-cyan-700 px-1.5 py-0.5">ICMP</span>
@@ -112,7 +112,7 @@ function LogModal({ isOpen, onClose, entries }) {
                         <span className="text-gray-500 text-xs font-mono">—</span>
                       )}
                     </td>
-                    <td className="py-2 pr-4 font-mono whitespace-nowrap">{entry.statusdate || entry.date}</td>
+                    <td className="py-2 pr-4 font-mono whitespace-nowrap">{entry.statusdate}</td>
                     <td className="py-2 font-mono text-xs">{entry.url || '—'}</td>
                   </tr>
                 ))

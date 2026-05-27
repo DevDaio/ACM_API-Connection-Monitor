@@ -20,7 +20,7 @@ function AddEndpointModal({ isOpen, onClose, onSubmit }) {
     const s = parseInt(secRef.current.value) || 30;
     const total = h * 3600 + m * 60 + s;
     if (total < 1) {
-      setError('Bitte mindestens 1 Sekunde eingeben');
+      setError('Please enter at least 1 second');
       return;
     }
     setLoading(true);

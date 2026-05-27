@@ -1,11 +1,15 @@
 // ─── EditUrlModal – URL + Check-Typ eines Endpunkts bearbeiten ───
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Modal from './Modal';
 
 function EditUrlModal({ isOpen, onClose, endpoint, value, onChange, onSave }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [checkType, setCheckType] = useState(endpoint?.checkType || 'http');
+
+  useEffect(() => {
+    setCheckType(endpoint?.checkType || 'http');
+  }, [endpoint]);
 
   async function handleSave(e) {
     e.preventDefault();

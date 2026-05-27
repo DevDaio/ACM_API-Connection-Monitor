@@ -1,7 +1,7 @@
 import Sparkline from './Sparkline';
 import { fmtDuration } from '../utils/helpers';
 
-function EndpointCard({ endpoint, onRemove, onToggle, onSetIntervall, onShowLog, onEditUrl }) {
+function EndpointCard({ endpoint, onRemove, onSetIntervall, onShowLog, onEditUrl }) {
   // Status-Bestimmung
   const isRunning = endpoint.status === 'Running';
   const isDown = endpoint.status === 'Down';
@@ -50,20 +50,6 @@ function EndpointCard({ endpoint, onRemove, onToggle, onSetIntervall, onShowLog,
       {/* ─── Steuerungs-Buttons ─── */}
       <td className="py-3.5 px-4">
         <div className="flex items-center justify-end gap-2">
-          {/* ON/OFF-Toggle (individuell pro Endpunkt) */}
-          <div className="flex items-center gap-1.5">
-            <button onClick={onToggle}
-              className={`relative w-8 h-1 transition-all rounded-full ${endpoint.active ? 'bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.5)]' : 'bg-gray-700'}`}>
-              <span className={`absolute -top-[3.5px] w-2 h-2 rounded-full transition-all border ${
-                endpoint.active
-                  ? 'right-0 bg-green-400 border-green-400 shadow-[0_0_6px_rgba(34,197,94,0.7)]'
-                  : 'left-0 bg-gray-500 border-gray-500'
-              }`} />
-            </button>
-            <span className={`text-[8px] font-mono tracking-wider ${
-              endpoint.active ? 'text-green-500' : 'text-gray-300'
-            }`}>{endpoint.active ? 'ON' : 'OFF'}</span>
-          </div>
           {/* Intervall-Button (Uhr-Symbol) */}
           <button onClick={onSetIntervall} className="text-gray-300 ac-tx-hover shrink-0" title="Interval">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>

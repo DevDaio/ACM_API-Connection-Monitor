@@ -23,11 +23,11 @@ use crate::types::AppState;
 #[tokio::main]
 async fn main() -> Result<(), sqlx::Error> {
     // Lädt .env-Datei (für DATABASE_URL, BACKEND_HOST, BACKEND_PORT)
-    dotenv::dotenv().ok();
+    dotenvy::dotenv().ok();
 
     // DB-Verbindung: URL aus Umgebungsvariable oder Fallback
     let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://admin:admin@localhost:5432/mydb".to_string());
+        .unwrap_or_else(|_| "postgres://postgres:admin123!@localhost:5432/database-acm".to_string());
 
     // Verbindungspool mit max. 5 gleichzeitigen Verbindungen
     let pool = PgPoolOptions::new()
@@ -44,17 +44,17 @@ async fn main() -> Result<(), sqlx::Error> {
     // "intervall":  Check-Intervalle pro Endpoint (in Sekunden)
     // "log":       Statusaufzeichnungen mit Datum, Uhrzeit und URL
     sqlx::query(r#"CREATE TABLE IF NOT EXISTS "user" (userid INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY, emailadress VARCHAR(100) NOT NULL UNIQUE, password VARCHAR(100) NOT NULL)"#).execute(&pool).await?;
-    sqlx::query("CREATE TABLE IF NOT EXISTS endpoint (endpointid INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY, url VARCHAR(300) NOT NULL)").execute(&pool).await?;
+    sqlx::query("CREATE TABLE IF NOT EXISTS endpoint (endpointid INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY, url VARCHAR(300) NOT NULL, check_type VARCHAR(10) NOT NULL DEFAULT 'http')").execute(&pool).await?;
     sqlx::query("CREATE TABLE IF NOT EXISTS userendpoint (userid INTEGER NOT NULL, endpointid INTEGER NOT NULL, PRIMARY KEY (userid, endpointid), FOREIGN KEY (userid) REFERENCES \"user\"(userid) ON DELETE CASCADE, FOREIGN KEY (endpointid) REFERENCES endpoint(endpointid) ON DELETE CASCADE)").execute(&pool).await?;
     sqlx::query("CREATE TABLE IF NOT EXISTS intervall (endpointid INTEGER PRIMARY KEY, seconds INTEGER NOT NULL, FOREIGN KEY (endpointid) REFERENCES endpoint(endpointid) ON DELETE CASCADE)").execute(&pool).await?;
-    sqlx::query("CREATE TABLE IF NOT EXISTS log (endpointid INTEGER NOT NULL, status BOOLEAN, statusdate DATE NOT NULL DEFAULT CURRENT_DATE, statustime TIME NOT NULL DEFAULT CURRENT_TIME, url VARCHAR(300), FOREIGN KEY (endpointid) REFERENCES endpoint(endpointid) ON DELETE CASCADE)").execute(&pool).await?;
+    sqlx::query("CREATE TABLE IF NOT EXISTS log (endpointid INTEGER NOT NULL, status BOOLEAN, statusdate DATE NOT NULL DEFAULT CURRENT_DATE, statustime TIME NOT NULL DEFAULT CURRENT_TIME, url VARCHAR(300), check_type VARCHAR(10), FOREIGN KEY (endpointid) REFERENCES endpoint(endpointid) ON DELETE CASCADE)").execute(&pool).await?;
     // Migration: url-Spalte nachträglich hinzugefügt (für bestehende DBs)
     sqlx::query("ALTER TABLE log ADD COLUMN IF NOT EXISTS url VARCHAR(300)").execute(&pool).await?;
     // Migration: status-Spalte auf NULL erlaubt (für URL-Edit-Events ohne Status)
     sqlx::query("ALTER TABLE log ALTER COLUMN status DROP NOT NULL").execute(&pool).await?;
-    // Migration: check_type für ICMP/HTTP/TCP-Auswahl pro Endpoint
+    // Migration (nur für bestehende DBs): check_type für ICMP/HTTP/TCP-Auswahl
     sqlx::query("ALTER TABLE endpoint ADD COLUMN IF NOT EXISTS check_type VARCHAR(10) NOT NULL DEFAULT 'http'").execute(&pool).await?;
-    // Migration: check_type in Log-Tabelle (für Anzeige welcher Check-Typ verwendet wurde)
+    // Migration (nur für bestehende DBs): check_type in Log-Tabelle
     sqlx::query("ALTER TABLE log ADD COLUMN IF NOT EXISTS check_type VARCHAR(10)").execute(&pool).await?;
     println!("Tables ready");
 

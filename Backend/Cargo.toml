@@ -17,7 +17,7 @@ serde_json = { version = "1.0.149" }
 # runtime-tokio = async mit tokio, tls-native-tls = SSL, postgres = PG-Support, chrono = Datum/Zeit-Typen
 sqlx = { version = "0.8", features = ["runtime-tokio", "tls-native-tls", "postgres", "chrono"] }
 # dotenv: Lädt .env-Dateien für lokale Entwicklung
-dotenv = "0.15.0"
+dotenvy = "0.15"
 # bcrypt: Passwort-Hashing (salt+hash)
 bcrypt = "0.16"
 # tower-http: Middleware (hier: CORS für Browser-Zugriff)
@@ -30,3 +30,5 @@ tower = "0.5"
 reqwest = "0.12"
 # uuid: Zufällige Session-Token generieren
 uuid = { version = "1", features = ["v4"] }
+# futures: Future-Tools (join_all für parallele Endpoint-Checks)
+futures = "0.3"

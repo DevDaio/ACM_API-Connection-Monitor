@@ -1,7 +1,6 @@
 // ─── Axum-Handler: Jede Funktion bearbeitet eine HTTP-Route ───
 // Öffentliche Routen: healthcheck, login, createAccount
-// Geschützte Routen: die meisten – erfordern Session-Token im Authorization-Header
-// Ausnahmen (kein Auth): setIntervall, deleteConfirm, updateEndpoint, log
+// Geschützte Routen: alle anderen – erfordern Session-Token im Authorization-Header
 
 use axum::{
     extract::{State, Query},
@@ -345,64 +344,76 @@ pub async fn handle_add_endpoint(
 // PUT /acm/setIntervall – Check-Intervall für einen Endpoint setzen/aktualisieren
 pub async fn handle_set_intervall(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Json(body): Json<SetIntervallReq>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorRes>)> {
-    async_services::set_intervall(&state.pool, body.endpointid, body.seconds)
+    let userid = get_userid_from_token(&headers, &state)?;
+    async_services::set_intervall(&state.pool, body.endpointid, userid, body.seconds)
         .await
         .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorRes { error: e.to_string() }),
-            )
+            if matches!(e, sqlx::Error::RowNotFound) {
+                (StatusCode::FORBIDDEN, Json(ErrorRes { error: "Access denied".to_string() }))
+            } else {
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorRes { error: e.to_string() }))
+            }
         })?;
     Ok(Json(serde_json::json!({ "status": "ok" })))
 }
 
-// PUT /acm/deleteConfirm – Endpoint und alle zugehörigen Daten löschen
+// PUT /acm/deleteConfirm – Endpoint und alle zugehörigen Daten löschen (nur eigener)
 pub async fn handle_delete_endpoint(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Json(body): Json<DeleteEndpointReq>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorRes>)> {
-    async_services::delete_endpoint(&state.pool, body.endpointid)
+    let userid = get_userid_from_token(&headers, &state)?;
+    async_services::delete_endpoint(&state.pool, body.endpointid, userid)
         .await
         .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorRes { error: e.to_string() }),
-            )
+            if matches!(e, sqlx::Error::RowNotFound) {
+                (StatusCode::FORBIDDEN, Json(ErrorRes { error: "Access denied".to_string() }))
+            } else {
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorRes { error: e.to_string() }))
+            }
         })?;
     Ok(Json(serde_json::json!({ "status": "ok" })))
 }
 
-// GET /acm/log?id=<id> – Log-Einträge für einen Endpoint abrufen
+// GET /acm/log?id=<id> – Log-Einträge für einen Endpoint abrufen (nur eigener)
 pub async fn handle_log(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Query(params): Query<IdParam>,
 ) -> Result<Json<Vec<async_services::Log>>, (StatusCode, Json<ErrorRes>)> {
-    let logs = async_services::get_log(&state.pool, params.id)
+    let userid = get_userid_from_token(&headers, &state)?;
+    let logs = async_services::get_log(&state.pool, params.id, userid)
         .await
         .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorRes { error: e.to_string() }),
-            )
+            if matches!(e, sqlx::Error::RowNotFound) {
+                (StatusCode::FORBIDDEN, Json(ErrorRes { error: "Access denied".to_string() }))
+            } else {
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorRes { error: e.to_string() }))
+            }
         })?;
     Ok(Json(logs))
 }
 
-// PUT /acm/updateEndpoint – URL eines Endpoints aktualisieren
+// PUT /acm/updateEndpoint – URL eines Endpoints aktualisieren (nur eigener)
 pub async fn handle_update_endpoint(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Json(body): Json<UpdateEndpointReq>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorRes>)> {
+    let userid = get_userid_from_token(&headers, &state)?;
     // URL (und optional check_type) in der endpoint-Tabelle aktualisieren
-    async_services::update_endpoint(&state.pool, body.endpointid, &body.url, body.check_type.as_deref())
+    async_services::update_endpoint(&state.pool, body.endpointid, userid, &body.url, body.check_type.as_deref())
         .await
         .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorRes { error: e.to_string() }),
-            )
+            if matches!(e, sqlx::Error::RowNotFound) {
+                (StatusCode::FORBIDDEN, Json(ErrorRes { error: "Access denied".to_string() }))
+            } else {
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorRes { error: e.to_string() }))
+            }
         })?;
     // Log-Eintrag mit neuer URL (status = None, check_type = None da kein Health-Check)
     async_services::insert_log(&state.pool, body.endpointid, None, Some(&body.url), None)

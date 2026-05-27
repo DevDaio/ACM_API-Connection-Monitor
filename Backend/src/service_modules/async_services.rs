@@ -7,13 +7,14 @@ use chrono::{NaiveDate, NaiveTime};
 // HashMap für Last-Checked-Zeiten, Duration + Instant für Intervall-Prüfung
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
+use futures::future::join_all;
 
 // ════════════════════════════════════════════════════════════════
 //  Datenbank-Modelle (entsprechen den SQL-Tabellen)
 // ════════════════════════════════════════════════════════════════
 
 // #[derive(sqlx::FromRow)] ermöglicht, dass sqlx Zeilen aus der DB direkt in dieses Struct parst
-// Die Feldnamen muessen exakt den Spaltennamen in der DB entsprechen
+// Die Feldnamen müssen exakt den Spaltennamen in der DB entsprechen
 #[derive(sqlx::FromRow, serde::Serialize, serde::Deserialize)]
 pub struct User {
     pub userid: i32,
@@ -168,8 +169,8 @@ pub async fn change_email(pool: &PgPool, userid: i32, new_email: &str) -> Result
 }
 
 // Löscht einen User (CASCADE löscht automatisch userendpoint, deren endpoints aber bleiben!)
-// Achtung: Das Loeschen des Users entfernt nur die Verknuepfung (userendpoint),
-// nicht die endpoint- oder log-Eintraege selbst.
+// Achtung: Das Löschen des Users entfernt nur die Verknüpfung (userendpoint),
+// nicht die endpoint- oder log-Einträge selbst.
 pub async fn delete_account(pool: &PgPool, userid: i32) -> Result<PgQueryResult, sqlx::Error> {
     let rows = sqlx::query(
         "DELETE FROM \"user\" WHERE userid = $1"
@@ -185,18 +186,8 @@ pub async fn delete_account(pool: &PgPool, userid: i32) -> Result<PgQueryResult,
 // ════════════════════════════════════════════════════════════════
 
 // Fügt einen neuen Endpunkt hinzu und verknüpft ihn mit dem User.
-// Wenn die endpoint-Tabelle leer ist, wird der Sequence-Counter zurückgesetzt (ALTER...RESTART).
-// Das verhindert Lücken in der ID-Vergabe beim ersten Eintrag nach DB-Reset.
+// Die endpointid wird automatisch von GENERATED ALWAYS AS IDENTITY vergeben.
 pub async fn add_endpoint(pool: &PgPool, userid: i32, url: &str, check_type: &str) -> Result<i32, sqlx::Error> {
-    // Prüfen, ob Tabelle leer ist – dann Sequence zurücksetzen
-    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM endpoint")
-        .fetch_one(pool)
-        .await?;
-    if count.0 == 0 {
-        sqlx::query("ALTER TABLE endpoint ALTER COLUMN endpointid RESTART WITH 1")
-            .execute(pool)
-            .await?;
-    }
     // Endpoint in die Tabelle einfügen und die generierte ID zurückgeben
     let row: (i32,) = sqlx::query_as(
         "INSERT INTO endpoint (url, check_type) VALUES ($1, $2) RETURNING endpointid"
@@ -217,8 +208,20 @@ pub async fn add_endpoint(pool: &PgPool, userid: i32, url: &str, check_type: &st
     Ok(endpointid)
 }
 
-// Aktualisiert die URL und optional check_type eines Endpunkts
-pub async fn update_endpoint(pool: &PgPool, endpointid: i32, url: &str, check_type: Option<&str>) -> Result<PgQueryResult, sqlx::Error> {
+// Aktualisiert die URL und optional check_type eines Endpunkts (nur wenn der User Eigentümer ist)
+pub async fn update_endpoint(pool: &PgPool, endpointid: i32, userid: i32, url: &str, check_type: Option<&str>) -> Result<PgQueryResult, sqlx::Error> {
+    // Prüfen, ob der User diesen Endpoint besitzt
+    let owned = sqlx::query_scalar::<_, i32>(
+        "SELECT 1 FROM userendpoint WHERE endpointid = $1 AND userid = $2"
+    )
+    .bind(endpointid)
+    .bind(userid)
+    .fetch_optional(pool)
+    .await?;
+    if owned.is_none() {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
     match check_type {
         Some(ct) => {
             sqlx::query("UPDATE endpoint SET url = $1, check_type = $2 WHERE endpointid = $3")
@@ -238,10 +241,22 @@ pub async fn update_endpoint(pool: &PgPool, endpointid: i32, url: &str, check_ty
     }
 }
 
-// Setzt oder aktualisiert das Intervall für einen Endpunkt.
+// Setzt oder aktualisiert das Intervall für einen Endpunkt (nur wenn der User Eigentümer ist).
 // ON CONFLICT (endpointid) DO UPDATE = UPSERT:
-// Wenn bereits ein Eintrag fuer diese endpointid existiert, wird seconds ueberschrieben.
-pub async fn set_intervall(pool: &PgPool, endpointid: i32, seconds: i32) -> Result<PgQueryResult, sqlx::Error> {
+// Wenn bereits ein Eintrag für diese endpointid existiert, wird seconds überschrieben.
+pub async fn set_intervall(pool: &PgPool, endpointid: i32, userid: i32, seconds: i32) -> Result<PgQueryResult, sqlx::Error> {
+    // Prüfen, ob der User diesen Endpoint besitzt
+    let owned = sqlx::query_scalar::<_, i32>(
+        "SELECT 1 FROM userendpoint WHERE endpointid = $1 AND userid = $2"
+    )
+    .bind(endpointid)
+    .bind(userid)
+    .fetch_optional(pool)
+    .await?;
+    if owned.is_none() {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
     let rows = sqlx::query(
         "INSERT INTO intervall (endpointid, seconds) VALUES ($1, $2) \
          ON CONFLICT (endpointid) DO UPDATE SET seconds = EXCLUDED.seconds"
@@ -253,11 +268,23 @@ pub async fn set_intervall(pool: &PgPool, endpointid: i32, seconds: i32) -> Resu
     Ok(rows)
 }
 
-// Löscht einen Endpunkt und alle abhängigen Daten.
+// Löscht einen Endpunkt und alle abhängigen Daten (nur wenn der User Eigentümer ist).
 // Reihenfolge wichtig: log -> intervall -> userendpoint -> endpoint
 // (ON DELETE CASCADE an den FK-Constraints würde automatisch löschen,
 //  dennoch wird explizit in Reihenfolge gelöscht für Klarheit)
-pub async fn delete_endpoint(pool: &PgPool, endpointid: i32) -> Result<PgQueryResult, sqlx::Error> {
+pub async fn delete_endpoint(pool: &PgPool, endpointid: i32, userid: i32) -> Result<PgQueryResult, sqlx::Error> {
+    // Prüfen, ob der User diesen Endpoint besitzt
+    let owned = sqlx::query_scalar::<_, i32>(
+        "SELECT 1 FROM userendpoint WHERE endpointid = $1 AND userid = $2"
+    )
+    .bind(endpointid)
+    .bind(userid)
+    .fetch_optional(pool)
+    .await?;
+    if owned.is_none() {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
     // Zuerst Logs löschen (abhängige Zeilen)
     sqlx::query("DELETE FROM log WHERE endpointid = $1")
         .bind(endpointid)
@@ -268,16 +295,20 @@ pub async fn delete_endpoint(pool: &PgPool, endpointid: i32) -> Result<PgQueryRe
         .bind(endpointid)
         .execute(pool)
         .await?;
-    // User-Verknüpfung löschen
-    sqlx::query("DELETE FROM userendpoint WHERE endpointid = $1")
+    // User-Verknüpfung löschen (der eigenen, für den Fall dass andere User denselben Endpoint haben)
+    sqlx::query("DELETE FROM userendpoint WHERE endpointid = $1 AND userid = $2")
         .bind(endpointid)
+        .bind(userid)
         .execute(pool)
         .await?;
-    // Endpoint selbst löschen
-    let rows = sqlx::query("DELETE FROM endpoint WHERE endpointid = $1")
-        .bind(endpointid)
-        .execute(pool)
-        .await?;
+    // Endpoint selbst löschen (nur wenn keine userendpoint-Verknüpfungen mehr existieren)
+    let rows = sqlx::query(
+        "DELETE FROM endpoint WHERE endpointid = $1 AND NOT EXISTS \
+         (SELECT 1 FROM userendpoint WHERE endpointid = $1)"
+    )
+    .bind(endpointid)
+    .execute(pool)
+    .await?;
     Ok(rows)
 }
 
@@ -285,8 +316,20 @@ pub async fn delete_endpoint(pool: &PgPool, endpointid: i32) -> Result<PgQueryRe
 //  Log-Funktionen
 // ════════════════════════════════════════════════════════════════
 
-// Holt alle Log-Einträge für einen Endpunkt, absteigend sortiert (neueste zuerst)
-pub async fn get_log(pool: &PgPool, endpointid: i32) -> Result<Vec<Log>, sqlx::Error> {
+// Holt alle Log-Einträge für einen Endpunkt (nur wenn der User Eigentümer ist), absteigend sortiert
+pub async fn get_log(pool: &PgPool, endpointid: i32, userid: i32) -> Result<Vec<Log>, sqlx::Error> {
+    // Prüfen, ob der User diesen Endpoint besitzt
+    let owned = sqlx::query_scalar::<_, i32>(
+        "SELECT 1 FROM userendpoint WHERE endpointid = $1 AND userid = $2"
+    )
+    .bind(endpointid)
+    .bind(userid)
+    .fetch_optional(pool)
+    .await?;
+    if owned.is_none() {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
     let logs = sqlx::query_as::<_, Log>(
         "SELECT * FROM log WHERE endpointid = $1 \
          ORDER BY statusdate DESC, statustime DESC"
@@ -327,7 +370,7 @@ pub struct EndpointInterval {
 }
 
 // Holt alle Endpunkte, die ein Intervall konfiguriert haben.
-// Nur diese werden vom Monitor ueberwacht.
+// Nur diese werden vom Monitor überwacht.
 pub async fn get_endpoints_with_intervals(pool: &PgPool) -> Result<Vec<EndpointInterval>, sqlx::Error> {
     sqlx::query_as::<_, EndpointInterval>(
         "SELECT i.endpointid, i.seconds, e.url, e.check_type \
@@ -380,13 +423,13 @@ async fn icmp_ping(target: &str) -> bool {
 }
 
 // Der zentrale Monitoring-Loop. Läuft in einem eigenen Tokio-Task.
-// Alle 5 Sekunden werden alle Endpunkte mit Intervall überprüft.
+// Alle 1 Sekunde werden fällige Endpunkte parallel überprüft (join_all).
 // Ein Endpunkt wird nur dann angefragt, wenn sein Intervall abgelaufen ist.
 pub async fn run_monitoring_loop(pool: PgPool) {
-    // reqwest-Client: HTTP-Client mit 10s Timeout
+    // reqwest-Client: HTTP-Client mit 5s Timeout
     // danger_accept_invalid_certs(true): erlaubt Self-Signed-Zertifikate (nur für Entwicklung!)
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(5))
         .danger_accept_invalid_certs(true)
         .build()
         .expect("Failed to build reqwest client");
@@ -407,45 +450,48 @@ pub async fn run_monitoring_loop(pool: PgPool) {
             }
         };
 
-        // Jeden Endpunkt einzeln checken
-        for ep in &endpoints {
-            // Prüfen, ob das Intervall abgelaufen ist
-            // last_checked.get() gibt Option<&Instant> zurueck
-            // None => wurde noch nie gecheckt => sofort checken
-            // Some(last) => vergleiche elapsed() mit dem konfigurierten Intervall
-            let should_check = match last_checked.get(&ep.endpointid) {
-                Some(last) => last.elapsed() >= Duration::from_secs(ep.seconds as u64),
-                None => true,
-            };
-
-            if !should_check {
-                continue;
-            }
-
-            // Check-Methode je nach check_type: HTTP oder ICMP
-            let status = match ep.check_type.as_str() {
-                "icmp" => icmp_ping(&ep.url).await,
-                "tcp" => tcp_ping(&ep.url).await,
-                _ => {
-                    // HTTP-GET an die Ziel-URL senden
-                    match client.get(&ep.url).send().await {
-                        Ok(resp) => resp.status().is_success(),
-                        Err(_) => false,
-                    }
+        // Fällige Endpoints filtern (sequentiell, read-only)
+        let due: Vec<&EndpointInterval> = endpoints
+            .iter()
+            .filter(|ep| {
+                match last_checked.get(&ep.endpointid) {
+                    Some(last) => last.elapsed() >= Duration::from_secs(ep.seconds as u64),
+                    None => true,
                 }
-            };
+            })
+            .collect();
 
-            // Status + URL + check_type in der Log-Tabelle speichern
-            if let Err(e) = insert_log(&pool, ep.endpointid, Some(status), Some(&ep.url), Some(&ep.check_type)).await {
-                eprintln!("[Monitor] Log insert error for ep {}: {e}", ep.endpointid);
+        // Alle fälligen Checks parallel ausführen
+        let results = join_all(due.iter().map(|ep| {
+            let client = client.clone();
+            let url = ep.url.clone();
+            let check_type = ep.check_type.clone();
+            async move {
+                let status = match check_type.as_str() {
+                    "icmp" => icmp_ping(&url).await,
+                    "tcp" => tcp_ping(&url).await,
+                    _ => client
+                        .get(&url)
+                        .send()
+                        .await
+                        .map(|r| r.status().is_success())
+                        .unwrap_or(false),
+                };
+                (ep.endpointid, status, url, check_type)
             }
+        }))
+        .await;
 
-            // letzten Check-Zeitpunkt aktualisieren
-            last_checked.insert(ep.endpointid, Instant::now());
+        // Ergebnisse sequentiell verarbeiten (Log + Timestamp)
+        for (endpointid, status, url, check_type) in results {
+            if let Err(e) = insert_log(&pool, endpointid, Some(status), Some(&url), Some(&check_type)).await {
+                eprintln!("[Monitor] Log insert error for ep {}: {e}", endpointid);
+            }
+            last_checked.insert(endpointid, Instant::now());
         }
 
-        // 5 Sekunden warten, bevor der nächste Durchlauf startet
+        // 1 Sekunde warten, bevor der nächste Durchlauf startet
         // Das ist der "Takt" des Monitors – nicht zu verwechseln mit den Endpunkt-Intervallen
-        tokio::time::sleep(Duration::from_secs(5)).await;
+        tokio::time::sleep(Duration::from_secs(1)).await;
     }
 }

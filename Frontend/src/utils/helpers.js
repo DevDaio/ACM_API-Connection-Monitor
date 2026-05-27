@@ -41,7 +41,6 @@ export function mapEndpoints(data) {
     endpointid: ep.endpointid,
     url: ep.url,
     checkType: ep.check_type || 'http',
-    active: true,
     status: ep.status === null ? 'Unknown' : (ep.status ? 'Running' : 'Down'),
     durationSeconds: ep.duration_seconds ?? 0,
     interval: fmtInterval(ep.interval_seconds),
