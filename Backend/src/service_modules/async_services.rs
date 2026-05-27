@@ -63,7 +63,7 @@ pub async fn create_account(pool: &PgPool, email: &str, password: &str) -> Resul
 pub struct EndpointExtended {
     pub endpointid: i32,
     pub url: String,
-    pub check_type: String,                      // "http" oder "icmp"
+    pub check_type: String,                      // "http", "tcp" oder "icmp"
     pub status: Option<bool>,                   // letzter Status (NULL wenn noch nie gecheckt)
     pub statusdate: Option<NaiveDate>,          // Datum des letzten Status
     pub statustime: Option<NaiveTime>,          // Uhrzeit des letzten Status
@@ -323,7 +323,7 @@ pub struct EndpointInterval {
     pub endpointid: i32,
     pub seconds: i32,  // Check-Intervall in Sekunden
     pub url: String,
-    pub check_type: String, // "http" oder "icmp"
+    pub check_type: String, // "http", "tcp" oder "icmp"
 }
 
 // Holt alle Endpunkte, die ein Intervall konfiguriert haben.

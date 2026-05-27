@@ -8,7 +8,7 @@
 
 ```mermaid
 graph TD
-    U["Browser / Nutzer"] -->|"HTTP :5173"| FE["Frontend (React + Vite)"]
+    U["Browser / Nutzer"] -->|"HTTP :8080"| FE["Frontend (React + Vite)"]
     FE -->|"HTTP/JSON :3000"| GW["Axum-Gateway (main.rs)"]
     GW -->|"sqlx (PgPool)"| DB[("PostgreSQL-Datenbank")]
     GW -->|"RwLock"| SESS["Sitzungen (HashMap &lt;Token, Nutzer-ID&gt;)"]
@@ -269,7 +269,7 @@ flowchart TD
     BUILD --> SCHLEIFE
 
     subgraph SCHLEIFE ["Hauptschleife (alle 5 Sekunden)"]
-        ABFR["SELECT i.endpointid, i.seconds, e.url, e.check_type<br/>FROM intervall i JOIN endpoint e<br/>USING (endpointid)"]
+        ABFR["SELECT i.endpointid, i.seconds, e.url, e.check_type<br/>FROM intervall i JOIN endpoint e<br/>ON e.endpointid = i.endpointid"]
         ABFR --> FEHLER{"DB-Fehler?"}
         FEHLER -->|"Ja"| FEHLER_LOG["eprintln + 10s schlafen"]
         FEHLER_LOG --> SCHLAF
@@ -625,8 +625,9 @@ ACM_API-Connection-Monitor/
 ├── Frontend/
 │   └── src/
 │       ├── App.jsx                     # Wurzel-Komponente, Bedingtes Rendering
-│       ├── App.css                     # Basis-Styles
-│       ├── api.js                      # HTTP-Client, Token-Verwaltung, 11 API-Funktionen
+│       ├── App.css                      # Tailwind-Import + Global-Styles
+│       ├── main.jsx                     # Einstiegspunkt (ReactDOM.createRoot)
+│       ├── api.js                      # HTTP-Client, Token-Verwaltung, 12 API-Funktionen
 │       ├── ThemeContext.jsx             # Theme-Provider (lava/green/purple)
 │       ├── hooks/
 │       │   └── useAppState.js           # Zentraler Zustand + alle Callback-Handler

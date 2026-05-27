@@ -70,10 +70,10 @@ open http://localhost:8080
 | `PUT` | `/acm/user/changeEmail` | ✅ Token | Email ändern |
 | `DELETE` | `/acm/user/deleteAccount` | ✅ Token | Account löschen |
 | `PUT` | `/acm/addEndpoint` | ✅ Token | Neuen Endpoint hinzufügen (Body: `url`, `check_type`=http\|tcp\|icmp) |
-| `PUT` | `/acm/updateEndpoint` | ✅ Token | Endpoint-URL ändern (Body: `url`, `check_type` optional) |
-| `PUT` | `/acm/setIntervall` | ✅ Token | Prüfintervall setzen |
-| `PUT` | `/acm/deleteConfirm` | ✅ Token | Endpoint löschen |
-| `GET` | `/acm/log?id=N` | ✅ Token | Log eines Endpoints |
+| `PUT` | `/acm/updateEndpoint` | ❌ | Endpoint-URL ändern (Body: `url`, `check_type` optional) |
+| `PUT` | `/acm/setIntervall` | ❌ | Prüfintervall setzen |
+| `PUT` | `/acm/deleteConfirm` | ❌ | Endpoint löschen |
+| `GET` | `/acm/log?id=N` | ❌ | Log eines Endpoints |
 
 > **Auth:** Geschützte Routen benötigen `Authorization: Bearer <token>` im Header.
 > Der Token wird bei Login/Registrierung ausgestellt und gilt bis zum Backend-Neustart.
@@ -85,7 +85,7 @@ user (userid, emailadress, password)
 endpoint (endpointid, url, check_type)      # check_type = "http" | "tcp" | "icmp"
 userendpoint (userid, endpointid)           # M:N-Verknüpfung
 intervall (endpointid, seconds)             # Prüfintervall pro Endpoint
-log (endpointid, status, statusdate, statustime, url, check_type)
+log (endpointid, status, statusdate, statustime, url, check_type)  # status/url/check_type nullable
 ```
 
 ## Projektstruktur
@@ -106,6 +106,8 @@ log (endpointid, status, statusdate, statustime, url, check_type)
 ├── Frontend/
 │   ├── src/
 │   │   ├── App.jsx                 # Render-Template (State via useAppState-Hook)
+│   │   ├── App.css                 # Tailwind-Import + Global-Styles
+│   │   ├── main.jsx                # Einstiegspunkt (ReactDOM.createRoot)
 │   │   ├── api.js                  # API-Client
 │   │   ├── ThemeContext.jsx         # Theme-Provider
 │   │   ├── index.css               # Theme-Vars + Utility-Classes
