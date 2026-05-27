@@ -21,7 +21,7 @@
 | **Frontend** | React 19 + Vite + Tailwind CSS v4 |
 | **Backend** | Rust + Axum + Tokio + sqlx |
 | **Datenbank** | PostgreSQL 17 |
-| **Monitoring** | reqwest (HTTP GET) im Hintergrund-Task |
+| **Monitoring** | HTTP / TCP / ICMP im Hintergrund-Task |
 
 ## Schnellstart (Entwicklung)
 
@@ -69,8 +69,8 @@ open http://localhost:8080
 | `PUT` | `/acm/user/changePassword` | ✅ Token | Passwort ändern |
 | `PUT` | `/acm/user/changeEmail` | ✅ Token | Email ändern |
 | `DELETE` | `/acm/user/deleteAccount` | ✅ Token | Account löschen |
-| `PUT` | `/acm/addEndpoint` | ✅ Token | Neuen Endpoint hinzufügen |
-| `PUT` | `/acm/updateEndpoint` | ✅ Token | Endpoint-URL ändern |
+| `PUT` | `/acm/addEndpoint` | ✅ Token | Neuen Endpoint hinzufügen (Body: `url`, `check_type`=http\|tcp\|icmp) |
+| `PUT` | `/acm/updateEndpoint` | ✅ Token | Endpoint-URL ändern (Body: `url`, `check_type` optional) |
 | `PUT` | `/acm/setIntervall` | ✅ Token | Prüfintervall setzen |
 | `PUT` | `/acm/deleteConfirm` | ✅ Token | Endpoint löschen |
 | `GET` | `/acm/log?id=N` | ✅ Token | Log eines Endpoints |
@@ -82,9 +82,9 @@ open http://localhost:8080
 
 ```
 user (userid, emailadress, password)
-endpoint (endpointid, url)
-userendpoint (userid, endpointid)    # M:N-Verknüpfung
-intervall (endpointid, seconds)      # Prüfintervall pro Endpoint
+endpoint (endpointid, url, check_type)      # check_type = "http" | "tcp" | "icmp"
+userendpoint (userid, endpointid)           # M:N-Verknüpfung
+intervall (endpointid, seconds)             # Prüfintervall pro Endpoint
 log (endpointid, status, statusdate, statustime)
 ```
 

@@ -93,7 +93,7 @@ After=network.target
 Type=simple
 User=ec2-user
 WorkingDirectory=/opt/acm-backend/Backend
-Environment=DATABASE_URL=postgres://acm_admin:<passwort>@acmdb.xxxxxxx.eu-central-1.rds.amazonaws.com:5432/acmdb
+EnvironmentFile=/opt/acm-backend/.env          # ← Läd DATABASE_URL, BACKEND_HOST, BACKEND_PORT aus .env
 Environment=RUST_LOG=info
 ExecStart=/opt/acm-backend/Backend/target/release/Backend
 Restart=always
@@ -101,6 +101,11 @@ Restart=always
 [Install]
 WantedBy=multi-user.target
 ```
+
+**Hinweis:** `EnvironmentFile=/opt/acm-backend/.env` lädt die `.env`-Datei aus dem
+Repo-Root. Dort muss vor dem ersten Start `DATABASE_URL` auf den RDS-Endpoint
+gesetzt sein (nicht `localhost:5432`). `systemd` setzt die Env-Vars → `dotenv::ok()`
+überschreibt sie nicht.
 
 ```bash
 sudo systemctl daemon-reload
@@ -201,7 +206,7 @@ Optional: HTTPS via Let's Encrypt/Certbot einrichten.
 - **Frontend:** React SPA → Nginx auf eigener EC2 (t3.small) – serviert statische Dateien + proxyed `/acm/*` ans Backend
 - **Backend:** Rust/Axum API auf eigener EC2 (t3.medium) – nur intern via Nginx-Proxy erreichbar
 - **Datenbank:** PostgreSQL 17 via AWS RDS (db.t3.micro)
-- **Monitoring:** Hintergrund-Task pingt alle aktiven Endpoints
+- **Monitoring:** Hintergrund-Task checkt alle aktiven Endpoints (HTTP / TCP / ICMP)
 - **Kommunikation:** Browser → Frontend-EC2 (public), Frontend-EC2 → Backend-EC2 (intern via Nginx Proxy), Backend-EC2 → RDS (intern)
 
 ## Umgebungsvariablen (.env)

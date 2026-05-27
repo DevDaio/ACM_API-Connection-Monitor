@@ -1,25 +1,23 @@
 // ─── AddEndpointModal – Neuen Endpunkt hinzufügen ───
-// Formular mit URL-Eingabe + Intervall (HH:MM:SS).
+// Formular mit URL-Eingabe + Intervall (HH:MM:SS) + Check-Typ (HTTP/ICMP).
 import { useState, useRef } from 'react';
 import Modal from './Modal';
 
 function AddEndpointModal({ isOpen, onClose, onSubmit }) {
-  // useRef: Input-Werte ohne Re-Renders (performance-optimiert)
   const urlRef = useRef(null);
   const hourRef = useRef(null);
   const minRef = useRef(null);
   const secRef = useRef(null);
+  const [checkType, setCheckType] = useState('http');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
-    // Intervall aus Stunden/Minuten/Sekunden zusammenrechnen
-    // || 0: Falls das Feld leer ist, 0 verwenden
     const h = parseInt(hourRef.current.value) || 0;
     const m = parseInt(minRef.current.value) || 0;
-    const s = parseInt(secRef.current.value) || 30;  // Default: 30 Sekunden
+    const s = parseInt(secRef.current.value) || 30;
     const total = h * 3600 + m * 60 + s;
     if (total < 1) {
       setError('Bitte mindestens 1 Sekunde eingeben');
@@ -27,8 +25,7 @@ function AddEndpointModal({ isOpen, onClose, onSubmit }) {
     }
     setLoading(true);
     try {
-      await onSubmit(urlRef.current.value, total);
-      // Felder leeren nach erfolgreichem Submit
+      await onSubmit(urlRef.current.value, total, checkType);
       urlRef.current.value = '';
       hourRef.current.value = '';
       minRef.current.value = '';
@@ -44,12 +41,27 @@ function AddEndpointModal({ isOpen, onClose, onSubmit }) {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Add New Endpoint">
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* ─── URL-Eingabe ─── */}
         <div>
           <label className="block text-sm text-gray-300 mb-1">URL</label>
           <input ref={urlRef} type="text" required className="w-full bg-gray-800 border border-gray-700  px-4 py-2.5 text-white focus:outline-none focus:ring-2 ac-ring" placeholder="https://api.example.com" />
         </div>
-        {/* ─── Intervall-Eingabe (Stunden / Minuten / Sekunden) ─── */}
+        <div>
+          <label className="block text-sm text-gray-300 mb-2">Check Type</label>
+          <div className="flex gap-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="radio" name="checkType" value="http" checked={checkType === 'http'} onChange={e => setCheckType(e.target.value)} className="accent-orange-500" />
+              <span className="text-sm text-gray-200">HTTP</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="radio" name="checkType" value="icmp" checked={checkType === 'icmp'} onChange={e => setCheckType(e.target.value)} className="accent-orange-500" />
+              <span className="text-sm text-gray-200">ICMP</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="radio" name="checkType" value="tcp" checked={checkType === 'tcp'} onChange={e => setCheckType(e.target.value)} className="accent-orange-500" />
+              <span className="text-sm text-gray-200">TCP (Port-Check)</span>
+            </label>
+          </div>
+        </div>
         <div>
           <label className="block text-sm text-gray-300 mb-2">Set Intervall</label>
           <div className="grid grid-cols-3 gap-3">

@@ -128,9 +128,9 @@ export function useAppState() {
     });
   }, []);
 
-  const handleAddEndpoint = useCallback(async (rawUrl, seconds) => {
-    const url = normalizeUrl(rawUrl);
-    const data = await api.addEndpoint(url);
+  const handleAddEndpoint = useCallback(async (rawUrl, seconds, checkType = 'http') => {
+    const url = checkType !== 'http' ? rawUrl.trim() : normalizeUrl(rawUrl);
+    const data = await api.addEndpoint(url, checkType);
     await api.setIntervall(data.endpointid, seconds);
     await refreshEndpoints();
     pollUntilReady();
@@ -167,10 +167,10 @@ export function useAppState() {
     setShowEditUrl(true);
   }, [endpoints]);
 
-  const handleSaveUrl = useCallback(async () => {
+  const handleSaveUrl = useCallback(async (checkType) => {
     const ep = selectedEndpoint;
-    const url = normalizeUrl(editUrlValue);
-    await api.updateEndpoint(ep.endpointid, url);
+    const url = checkType !== 'http' ? editUrlValue.trim() : normalizeUrl(editUrlValue);
+    await api.updateEndpoint(ep.endpointid, url, checkType);
     await refreshEndpoints();
     pollUntilReady();
   }, [selectedEndpoint, editUrlValue, refreshEndpoints, pollUntilReady]);

@@ -44,6 +44,12 @@ pub struct ChangeEmailReq {
 #[derive(Deserialize)]
 pub struct AddEndpointReq {
     pub url: String,
+    #[serde(default = "default_check_type")]
+    pub check_type: String, // "http" oder "icmp"
+}
+
+fn default_check_type() -> String {
+    "http".to_string()
 }
 
 #[derive(Deserialize)]
@@ -61,6 +67,7 @@ pub struct DeleteEndpointReq {
 pub struct UpdateEndpointReq {
     pub endpointid: i32,
     pub url: String,
+    pub check_type: Option<String>, // None = nicht ändern
 }
 
 // Query-Parameter für GET-Requests (z. B. /acm/log?endpointid=5)

@@ -330,7 +330,7 @@ pub async fn handle_add_endpoint(
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorRes>)> {
     let userid = get_userid_from_token(&headers, &state)?;
 
-    let endpointid = async_services::add_endpoint(&state.pool, userid, &body.url)
+    let endpointid = async_services::add_endpoint(&state.pool, userid, &body.url, &body.check_type)
         .await
         .map_err(|e| {
             (
@@ -394,8 +394,8 @@ pub async fn handle_update_endpoint(
     State(state): State<Arc<AppState>>,
     Json(body): Json<UpdateEndpointReq>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorRes>)> {
-    // URL in der endpoint-Tabelle aktualisieren
-    async_services::update_endpoint(&state.pool, body.endpointid, &body.url)
+    // URL (und optional check_type) in der endpoint-Tabelle aktualisieren
+    async_services::update_endpoint(&state.pool, body.endpointid, &body.url, body.check_type.as_deref())
         .await
         .map_err(|e| {
             (

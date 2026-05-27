@@ -62,6 +62,7 @@ pub async fn create_account(pool: &PgPool, email: &str, password: &str) -> Resul
 pub struct EndpointExtended {
     pub endpointid: i32,
     pub url: String,
+    pub check_type: String,                      // "http" oder "icmp"
     pub status: Option<bool>,                   // letzter Status (NULL wenn noch nie gecheckt)
     pub statusdate: Option<NaiveDate>,          // Datum des letzten Status
     pub statustime: Option<NaiveTime>,          // Uhrzeit des letzten Status
@@ -79,7 +80,7 @@ pub struct EndpointExtended {
 //   - status_history: sammelt die letzten 30 Statuswerte in ein Array (für Sparkline-Chart)
 pub async fn get_user_endpoints(pool: &PgPool, userid: i32) -> Result<Vec<EndpointExtended>, sqlx::Error> {
     sqlx::query_as::<_, EndpointExtended>(
-        "SELECT e.endpointid, e.url, l.status, l.statusdate, l.statustime, \
+        "SELECT e.endpointid, e.url, e.check_type, l.status, l.statusdate, l.statustime, \
                 CASE WHEN l.statusdate IS NOT NULL THEN \
                   EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - ( \
                     SELECT COALESCE( \
@@ -185,7 +186,7 @@ pub async fn delete_account(pool: &PgPool, userid: i32) -> Result<PgQueryResult,
 // Fügt einen neuen Endpunkt hinzu und verknüpft ihn mit dem User.
 // Wenn die endpoint-Tabelle leer ist, wird der Sequence-Counter zurückgesetzt (ALTER...RESTART).
 // Das verhindert Lücken in der ID-Vergabe beim ersten Eintrag nach DB-Reset.
-pub async fn add_endpoint(pool: &PgPool, userid: i32, url: &str) -> Result<i32, sqlx::Error> {
+pub async fn add_endpoint(pool: &PgPool, userid: i32, url: &str, check_type: &str) -> Result<i32, sqlx::Error> {
     // Prüfen, ob Tabelle leer ist – dann Sequence zurücksetzen
     let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM endpoint")
         .fetch_one(pool)
@@ -197,9 +198,10 @@ pub async fn add_endpoint(pool: &PgPool, userid: i32, url: &str) -> Result<i32, 
     }
     // Endpoint in die Tabelle einfügen und die generierte ID zurückgeben
     let row: (i32,) = sqlx::query_as(
-        "INSERT INTO endpoint (url) VALUES ($1) RETURNING endpointid"
+        "INSERT INTO endpoint (url, check_type) VALUES ($1, $2) RETURNING endpointid"
     )
     .bind(url)
+    .bind(check_type)
     .fetch_one(pool)
     .await?;
     let endpointid = row.0;
@@ -214,13 +216,25 @@ pub async fn add_endpoint(pool: &PgPool, userid: i32, url: &str) -> Result<i32, 
     Ok(endpointid)
 }
 
-// Aktualisiert die URL eines Endpunkts
-pub async fn update_endpoint(pool: &PgPool, endpointid: i32, url: &str) -> Result<PgQueryResult, sqlx::Error> {
-    sqlx::query("UPDATE endpoint SET url = $1 WHERE endpointid = $2")
-        .bind(url)
-        .bind(endpointid)
-        .execute(pool)
-        .await
+// Aktualisiert die URL und optional check_type eines Endpunkts
+pub async fn update_endpoint(pool: &PgPool, endpointid: i32, url: &str, check_type: Option<&str>) -> Result<PgQueryResult, sqlx::Error> {
+    match check_type {
+        Some(ct) => {
+            sqlx::query("UPDATE endpoint SET url = $1, check_type = $2 WHERE endpointid = $3")
+                .bind(url)
+                .bind(ct)
+                .bind(endpointid)
+                .execute(pool)
+                .await
+        }
+        None => {
+            sqlx::query("UPDATE endpoint SET url = $1 WHERE endpointid = $2")
+                .bind(url)
+                .bind(endpointid)
+                .execute(pool)
+                .await
+        }
+    }
 }
 
 // Setzt oder aktualisiert das Intervall für einen Endpunkt.
@@ -307,18 +321,60 @@ pub struct EndpointInterval {
     pub endpointid: i32,
     pub seconds: i32,  // Check-Intervall in Sekunden
     pub url: String,
+    pub check_type: String, // "http" oder "icmp"
 }
 
 // Holt alle Endpunkte, die ein Intervall konfiguriert haben.
 // Nur diese werden vom Monitor ueberwacht.
 pub async fn get_endpoints_with_intervals(pool: &PgPool) -> Result<Vec<EndpointInterval>, sqlx::Error> {
     sqlx::query_as::<_, EndpointInterval>(
-        "SELECT i.endpointid, i.seconds, e.url \
+        "SELECT i.endpointid, i.seconds, e.url, e.check_type \
          FROM intervall i \
          JOIN endpoint e ON e.endpointid = i.endpointid"
     )
     .fetch_all(pool)
     .await
+}
+
+// TCP-Port-Check: prüft ob ein TCP-Port offen ist (connect mit 5s Timeout)
+async fn tcp_ping(target: &str) -> bool {
+    // Entferne http:// oder https:// Prefix falls vorhanden
+    let addr = target
+        .strip_prefix("http://")
+        .or_else(|| target.strip_prefix("https://"))
+        .and_then(|s| s.split('/').next())
+        .unwrap_or(target);
+
+    match tokio::time::timeout(
+        Duration::from_secs(5),
+        tokio::net::TcpStream::connect(addr),
+    )
+    .await
+    {
+        Ok(Ok(_)) => true,
+        _ => false,
+    }
+}
+
+// ICMP-Ping via system ping (kein root nötig – system ping hat bereits CAP_NET_RAW)
+async fn icmp_ping(target: &str) -> bool {
+    let hostname = target
+        .strip_prefix("http://")
+        .or_else(|| target.strip_prefix("https://"))
+        .and_then(|s| s.split('/').next())
+        .and_then(|s| s.split(':').next())
+        .unwrap_or(target);
+
+    match tokio::process::Command::new("ping")
+        .arg("-c1")
+        .arg("-W3")
+        .arg(hostname)
+        .output()
+        .await
+    {
+        Ok(output) => output.status.success(),
+        Err(_) => false,
+    }
 }
 
 // Der zentrale Monitoring-Loop. Läuft in einem eigenen Tokio-Task.
@@ -364,12 +420,17 @@ pub async fn run_monitoring_loop(pool: PgPool) {
                 continue;
             }
 
-            // HTTP-GET an die Ziel-URL senden
-            // response.status().is_success() => 2xx-Statuscode
-            // Err (z. B. Timeout, Connection-Refused) => false (Down)
-            let status = match client.get(&ep.url).send().await {
-                Ok(resp) => resp.status().is_success(),
-                Err(_) => false,
+            // Check-Methode je nach check_type: HTTP oder ICMP
+            let status = match ep.check_type.as_str() {
+                "icmp" => icmp_ping(&ep.url).await,
+                "tcp" => tcp_ping(&ep.url).await,
+                _ => {
+                    // HTTP-GET an die Ziel-URL senden
+                    match client.get(&ep.url).send().await {
+                        Ok(resp) => resp.status().is_success(),
+                        Err(_) => false,
+                    }
+                }
             };
 
             // Status + URL in der Log-Tabelle speichern

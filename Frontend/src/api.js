@@ -68,8 +68,8 @@ export const api = {
   deleteAccount: () =>
     request('DELETE', '/user/deleteAccount'),
 
-  addEndpoint: (url) =>
-    request('PUT', '/addEndpoint', { url }),
+  addEndpoint: (url, checkType = 'http') =>
+    request('PUT', '/addEndpoint', { url, check_type: checkType }),
 
   setIntervall: (endpointid, seconds) =>
     request('PUT', '/setIntervall', { endpointid, seconds }),
@@ -80,6 +80,6 @@ export const api = {
   getLog: (endpointid) =>
     request('GET', `/log?id=${endpointid}`),
 
-  updateEndpoint: (endpointid, url) =>
-    request('PUT', '/updateEndpoint', { endpointid, url }),
+  updateEndpoint: (endpointid, url, checkType) =>
+    request('PUT', '/updateEndpoint', { endpointid, url, check_type: checkType || null }),
 };

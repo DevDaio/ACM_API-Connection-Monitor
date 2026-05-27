@@ -52,6 +52,8 @@ async fn main() -> Result<(), sqlx::Error> {
     sqlx::query("ALTER TABLE log ADD COLUMN IF NOT EXISTS url VARCHAR(300)").execute(&pool).await?;
     // Migration: status-Spalte auf NULL erlaubt (für URL-Edit-Events ohne Status)
     sqlx::query("ALTER TABLE log ALTER COLUMN status DROP NOT NULL").execute(&pool).await?;
+    // Migration: check_type für ICMP/HTTP-Auswahl pro Endpoint
+    sqlx::query("ALTER TABLE endpoint ADD COLUMN IF NOT EXISTS check_type VARCHAR(10) NOT NULL DEFAULT 'http'").execute(&pool).await?;
     println!("Tables ready");
 
     // ─── Hintergrund-Monitoring-Loop starten ───

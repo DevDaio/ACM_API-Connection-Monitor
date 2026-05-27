@@ -29,6 +29,11 @@ function EndpointCard({ endpoint, onRemove, onToggle, onSetIntervall, onShowLog,
         <div className="flex items-center gap-2 max-w-xs">
           {/* text-truncate: Lange URLs werden mit "..." abgeschnitten */}
           <span className="text-sm text-gray-200 font-mono truncate">{endpoint.url}</span>
+          <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 leading-none shrink-0 ${
+            endpoint.checkType === 'icmp' ? 'text-cyan-400 border border-cyan-700' :
+            endpoint.checkType === 'tcp' ? 'text-purple-400 border border-purple-700' :
+            'text-orange-400 border border-orange-700'
+          }`}>{endpoint.checkType === 'icmp' ? 'ICMP' : endpoint.checkType === 'tcp' ? 'TCP' : 'HTTP'}</span>
           <button onClick={onEditUrl} className="text-gray-300 ac-tx-hover shrink-0 text-[10px] font-bold border border-gray-700 px-1.5 py-0.5 leading-none" title="Edit URL">EDIT</button>
         </div>
       </td>
