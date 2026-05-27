@@ -298,7 +298,7 @@ flowchart TD
         ICMP_OK -->|"Ja"| UP
         ICMP_OK -->|"Nein"| DOWN
 
-        UP --> EINFUEG["INSERT INTO log (endpointid, status, url)<br/>VALUES ($1, $2, $3)"]
+        UP --> EINFUEG["INSERT INTO log (endpointid, status, url, check_type)<br/>VALUES ($1, $2, $3, $4)"]
         DOWN --> EINFUEG
 
         EINFUEG --> EINFUEG_FEHLER{"Einfügen-Fehler?"}
@@ -365,9 +365,10 @@ classDiagram
     class Log {
         +INTEGER endpointid FK
         +BOOLEAN status [nullable]
+        +VARCHAR(300) url [nullable]
+        +VARCHAR(10) check_type [nullable]
         +DATE statusdate DEFAULT CURRENT_DATE
         +TIME statustime DEFAULT CURRENT_TIME
-        +VARCHAR(300) url [nullable]
     }
 
     Benutzer "1" --> "*" BenutzerEndpunkt : "userid → userid ON DELETE CASCADE"
@@ -415,6 +416,7 @@ CREATE TABLE IF NOT EXISTS log (
     endpointid  INTEGER NOT NULL,
     status      BOOLEAN,                    -- true=up, false=down, NULL=URL-edit
     url         VARCHAR(300),               -- URL zum Zeitpunkt des Eintrags
+    check_type  VARCHAR(10),               -- "http", "tcp", "icmp", NULL=Edit
     statusdate  DATE NOT NULL DEFAULT CURRENT_DATE,
     statustime  TIME NOT NULL DEFAULT CURRENT_TIME,
     FOREIGN KEY (endpointid) REFERENCES endpoint(endpointid) ON DELETE CASCADE
@@ -424,6 +426,7 @@ CREATE TABLE IF NOT EXISTS log (
 ALTER TABLE log ADD COLUMN IF NOT EXISTS url VARCHAR(300);
 ALTER TABLE log ALTER COLUMN status DROP NOT NULL;
 ALTER TABLE endpoint ADD COLUMN IF NOT EXISTS check_type VARCHAR(10) NOT NULL DEFAULT 'http';
+ALTER TABLE log ADD COLUMN IF NOT EXISTS check_type VARCHAR(10);
 ```
 
 **Komplexe Dashboard-Abfrage** (in `get_user_endpoints`, async_services.rs:80-114):

@@ -403,8 +403,8 @@ pub async fn handle_update_endpoint(
                 Json(ErrorRes { error: e.to_string() }),
             )
         })?;
-    // Log-Eintrag mit neuer URL (status = None, da kein Health-Check)
-    async_services::insert_log(&state.pool, body.endpointid, None, Some(&body.url))
+    // Log-Eintrag mit neuer URL (status = None, check_type = None da kein Health-Check)
+    async_services::insert_log(&state.pool, body.endpointid, None, Some(&body.url), None)
         .await
         .map_err(|e| {
             (

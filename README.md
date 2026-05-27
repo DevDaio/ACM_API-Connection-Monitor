@@ -85,7 +85,7 @@ user (userid, emailadress, password)
 endpoint (endpointid, url, check_type)      # check_type = "http" | "tcp" | "icmp"
 userendpoint (userid, endpointid)           # M:N-Verknüpfung
 intervall (endpointid, seconds)             # Prüfintervall pro Endpoint
-log (endpointid, status, statusdate, statustime)
+log (endpointid, status, statusdate, statustime, url, check_type)
 ```
 
 ## Projektstruktur

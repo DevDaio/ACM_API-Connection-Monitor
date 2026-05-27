@@ -37,10 +37,12 @@ CREATE TABLE IF NOT EXISTS intervall (
 --          Dieses File dient als Referenz fuer manuelle DB-Setups.
 -- status ist nullable: NULL = URL-Edit-Event, true = up, false = down.
 -- url speichert die zum Zeitpunkt des Checks aktuelle URL (kann sich via Edit aendern).
+-- check_type speichert welche Methode verwendet wurde: "http", "tcp", "icmp", NULL=Edit.
 CREATE TABLE IF NOT EXISTS log (
     endpointid INTEGER NOT NULL,
     status BOOLEAN,
     url VARCHAR(300),
+    check_type VARCHAR(10),
     statusdate DATE NOT NULL DEFAULT CURRENT_DATE,
     statustime TIME NOT NULL DEFAULT CURRENT_TIME,
     FOREIGN KEY (endpointid) REFERENCES endpoint(endpointid) ON DELETE CASCADE

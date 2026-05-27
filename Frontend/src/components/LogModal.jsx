@@ -24,7 +24,7 @@ function LogModal({ isOpen, onClose, entries }) {
   }, [entries, filter, dateFilter]);
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Log">
+    <Modal isOpen={isOpen} onClose={onClose} title="Log" wide>
       {/* ─── Filter-Leiste ─── */}
       <div className="flex flex-wrap gap-2 mb-4 items-center">
         {/* Status-Buttons (All / Up / Down) */}
@@ -45,26 +45,27 @@ function LogModal({ isOpen, onClose, entries }) {
         {dateFilter && <button onClick={() => setDateFilter('')} className="text-gray-500 hover:text-white text-xs font-mono">&times;</button>}
       </div>
 
-      {/* ─── Log-Tabelle (scrollbar) ─── */}
-      <div className="overflow-auto max-h-[55vh]">
+      {/* ─── Log-Tabelle ─── */}
+      <div className="max-h-[55vh]">
           <table className="w-full text-sm text-left">
             <thead>
               <tr className="text-gray-300 border-b border-gray-700">
-                <th className="pb-2 pr-4">EndpointID</th>
-                <th className="pb-2 pr-4">Status</th>
-                <th className="pb-2 pr-4">Time</th>
-                <th className="pb-2 pr-4">Date</th>
-                <th className="pb-2">URL</th>
+                <th className="pb-2 pr-4 whitespace-nowrap">ID</th>
+                <th className="pb-2 pr-4 whitespace-nowrap">Status</th>
+                <th className="pb-2 pr-4 whitespace-nowrap">Time</th>
+                <th className="pb-2 pr-4 whitespace-nowrap">Method</th>
+                <th className="pb-2 pr-4 whitespace-nowrap">Date</th>
+                <th className="pb-2 whitespace-nowrap">URL</th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan="5" className="py-6 text-gray-300 text-center">Keine Einträge für diesen Filter</td></tr>
+                <tr><td colSpan="6" className="py-6 text-gray-300 text-center">Keine Einträge für diesen Filter</td></tr>
               ) : (
                 filtered.map((entry, i) => (
                   <tr key={i} className="border-b border-gray-800 text-white">
-                    <td className="py-2 pr-4 font-mono">{entry.endpointid}</td>
-                    <td className="py-2 pr-4">
+                    <td className="py-2 pr-4 font-mono whitespace-nowrap">{entry.endpointid}</td>
+                    <td className="py-2 pr-4 whitespace-nowrap">
                       {entry.status === null || entry.status === undefined ? (
                         <span className="text-yellow-400 text-xs font-mono tracking-wider">EDITED</span>
                       ) : (
@@ -74,9 +75,20 @@ function LogModal({ isOpen, onClose, entries }) {
                         </>
                       )}
                     </td>
-                    <td className="py-2 pr-4 font-mono">{(entry.statustime || entry.time || '').split('.').shift()}</td>
-                    <td className="py-2 pr-4 font-mono">{entry.statusdate || entry.date}</td>
-                    <td className="py-2 font-mono text-xs max-w-[200px] truncate">{entry.url || '—'}</td>
+                    <td className="py-2 pr-4 font-mono whitespace-nowrap">{(entry.statustime || entry.time || '').split('.').shift()}</td>
+                    <td className="py-2 pr-4 whitespace-nowrap">
+                      {entry.check_type === 'icmp' ? (
+                        <span className="text-cyan-400 text-xs font-mono font-bold border border-cyan-700 px-1.5 py-0.5">ICMP</span>
+                      ) : entry.check_type === 'tcp' ? (
+                        <span className="text-purple-400 text-xs font-mono font-bold border border-purple-700 px-1.5 py-0.5">TCP</span>
+                      ) : entry.check_type === 'http' ? (
+                        <span className="text-orange-400 text-xs font-mono font-bold border border-orange-700 px-1.5 py-0.5">HTTP</span>
+                      ) : (
+                        <span className="text-gray-500 text-xs font-mono">—</span>
+                      )}
+                    </td>
+                    <td className="py-2 pr-4 font-mono whitespace-nowrap">{entry.statusdate || entry.date}</td>
+                    <td className="py-2 font-mono text-xs">{entry.url || '—'}</td>
                   </tr>
                 ))
               )}

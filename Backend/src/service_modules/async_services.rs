@@ -31,6 +31,7 @@ pub struct Log {
     pub statusdate: NaiveDate,  // Datum des Status-Checks
     pub statustime: NaiveTime,  // Uhrzeit des Status-Checks
     pub url: Option<String>,    // URL zum Zeitpunkt des Eintrags
+    pub check_type: Option<String>, // "http", "tcp", "icmp", NULL = URL-Edit
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -299,13 +300,14 @@ pub async fn get_log(pool: &PgPool, endpointid: i32) -> Result<Vec<Log>, sqlx::E
 // Fügt einen Log-Eintrag ein.
 // status: Some(true/false) = Monitor-Check, None = URL-Edit
 // url: wird mitgespeichert, damit Änderungen nachvollziehbar sind
-pub async fn insert_log(pool: &PgPool, endpointid: i32, status: Option<bool>, url: Option<&str>) -> Result<PgQueryResult, sqlx::Error> {
+pub async fn insert_log(pool: &PgPool, endpointid: i32, status: Option<bool>, url: Option<&str>, check_type: Option<&str>) -> Result<PgQueryResult, sqlx::Error> {
     let rows = sqlx::query(
-        "INSERT INTO log (endpointid, status, url) VALUES ($1, $2, $3)"
+        "INSERT INTO log (endpointid, status, url, check_type) VALUES ($1, $2, $3, $4)"
     )
     .bind(endpointid)
     .bind(status)
     .bind(url)
+    .bind(check_type)
     .execute(pool)
     .await?;
     Ok(rows)
@@ -433,8 +435,8 @@ pub async fn run_monitoring_loop(pool: PgPool) {
                 }
             };
 
-            // Status + URL in der Log-Tabelle speichern
-            if let Err(e) = insert_log(&pool, ep.endpointid, Some(status), Some(&ep.url)).await {
+            // Status + URL + check_type in der Log-Tabelle speichern
+            if let Err(e) = insert_log(&pool, ep.endpointid, Some(status), Some(&ep.url), Some(&ep.check_type)).await {
                 eprintln!("[Monitor] Log insert error for ep {}: {e}", ep.endpointid);
             }
 

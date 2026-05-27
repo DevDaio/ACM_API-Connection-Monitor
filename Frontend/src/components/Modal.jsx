@@ -3,7 +3,7 @@
 // Alle spezifischen Modals (AddEndpoint, Settings, Log, etc.) nutzen dieses Grundgeruest.
 // Props: isOpen, onClose (schliesst bei Klick auf Hintergrund), title, children
 
-function Modal({ isOpen, onClose, title, children }) {
+function Modal({ isOpen, onClose, title, children, wide }) {
   // isOpen = false → gar nichts rendern (DOM-frei, kein visibility-Trick)
   if (!isOpen) return null;
 
@@ -12,7 +12,7 @@ function Modal({ isOpen, onClose, title, children }) {
     // onClick={onClose}: Klick auf Overlay-Hintergrund schliesst das Modal
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={onClose}>
       {/* Modal-Container: onClick stoppt Event-Propagation, damit Klick auf Modal-Inhalt nicht schliesst */}
-      <div className="bg-gray-950 border ac-bd w-full max-w-md mx-4 max-h-[85vh] flex flex-col relative"
+      <div className={`bg-gray-950 border ac-bd w-full mx-4 max-h-[85vh] flex flex-col relative ${wide ? 'max-w-3xl' : 'max-w-md'}`}
         onClick={e => e.stopPropagation()}
         style={{boxShadow: '0 0 40px rgba(234,88,12,0.1), inset 0 0 40px rgba(234,88,12,0.03)'}}>
 
