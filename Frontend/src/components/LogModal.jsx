@@ -6,22 +6,29 @@ import { useState, useMemo } from 'react';
 import Modal from './Modal';
 
 function LogModal({ isOpen, onClose, entries }) {
-  const [filter, setFilter] = useState('all');    // all | up | down
-  const [dateFilter, setDateFilter] = useState(''); // optionales Datum (YYYY-MM-DD)
+  const [filter, setFilter] = useState('all');        // all | up | down
+  const [methodFilter, setMethodFilter] = useState('all'); // all | http | tcp | icmp | none
+  const [dateFilter, setDateFilter] = useState('');     // optionales Datum (YYYY-MM-DD)
 
-  // useMemo: filtert Logs nur bei Aenderung von entries, filter oder dateFilter
-  // Vermeidet unnötige Neuberechnungen bei jedem Render
+  // useMemo: filtert Logs nur bei Aenderung von entries, filter, methodFilter oder dateFilter
   const filtered = useMemo(() => {
     let list = filter === 'all' ? entries
       : filter === 'up' ? entries.filter(e => e.status === true)
       : entries.filter(e => e.status === false);
 
-    // Optional: Filter nach Datum (startsWith für Teiluebereinstimmung)
+    if (methodFilter !== 'all') {
+      if (methodFilter === 'none') {
+        list = list.filter(e => !e.check_type);
+      } else {
+        list = list.filter(e => e.check_type === methodFilter);
+      }
+    }
+
     if (dateFilter) {
       list = list.filter(e => (e.statusdate || e.date || '').startsWith(dateFilter));
     }
     return list;
-  }, [entries, filter, dateFilter]);
+  }, [entries, filter, methodFilter, dateFilter]);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Log" wide>
@@ -36,6 +43,24 @@ function LogModal({ isOpen, onClose, entries }) {
                 : 'bg-gray-800 text-gray-300 hover:text-white border border-gray-700'
             }`}>
             {f === 'all' ? 'All' : f === 'up' ? 'Up' : 'Down'}
+          </button>
+        ))}
+        <span className="w-px h-6 bg-gray-700 mx-1" />
+        {/* Method-Buttons (HTTP / TCP / ICMP / —) */}
+        {[
+          { key: 'all', label: 'All' },
+          { key: 'http', label: 'HTTP', cls: 'text-orange-400 border-orange-700 hover:border-orange-500' },
+          { key: 'tcp', label: 'TCP', cls: 'text-purple-400 border-purple-700 hover:border-purple-500' },
+          { key: 'icmp', label: 'ICMP', cls: 'text-cyan-400 border-cyan-700 hover:border-cyan-500' },
+          { key: 'none', label: '—', cls: 'text-gray-500 border-gray-600' },
+        ].map(m => (
+          <button key={m.key} onClick={() => setMethodFilter(m.key)}
+            className={`px-3 py-1.5 text-xs font-mono font-bold border transition-colors ${
+              methodFilter === m.key
+                ? 'bg-gray-700 ' + m.cls
+                : 'bg-gray-800 text-gray-300 border-gray-700 hover:border-gray-500'
+            }`}>
+            {m.label}
           </button>
         ))}
         <div className="ml-auto" />
