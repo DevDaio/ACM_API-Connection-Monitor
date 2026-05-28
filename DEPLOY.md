@@ -42,7 +42,7 @@ open http://localhost:8080
 - **Public Access:** Nein (nur intern via Security Group)
 - **Security Group:** Erlaube PostgreSQL (Port 5432) von den Security-Groups der Backend-EC2
 - **DB-Name:** `database-acm`
-- **Master-Username:** `acm_admin`
+- **Master-Username:** `postgres'
 - **Master-Password:** starkes Passwort via Secrets Manager oder Parameter Store
 
 Nach dem Erstellen die RDS-Endpoint-URL notieren (z. B. `database-acm.xxxxxxx.eu-central-1.rds.amazonaws.com`).
@@ -92,10 +92,10 @@ After=network.target
 [Service]
 Type=simple
 User=ec2-user
-WorkingDirectory=/opt/acm-backend/Backend
-EnvironmentFile=/opt/acm-backend/.env          # ← Läd DATABASE_URL, BACKEND_HOST, BACKEND_PORT aus .env
+WorkingDirectory=/home/ec2-user/ACM_API-Connection-Monitor/Backend
+EnvironmentFile=/home/ec2-user/ACM_API-Connection-Monitor/.env       
 Environment=RUST_LOG=info
-ExecStart=/opt/acm-backend/Backend/target/release/Backend
+ExecStart=/home/ec2-user/ACM_API-Connection-Monitor/Backend/target/release/Backend
 Restart=always
 
 [Install]
