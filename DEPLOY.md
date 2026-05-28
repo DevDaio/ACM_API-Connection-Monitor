@@ -41,11 +41,11 @@ open http://localhost:8080
 - **VPC:** Standard-VPC (gleiche VPC wie EC2-Instanzen)
 - **Public Access:** Nein (nur intern via Security Group)
 - **Security Group:** Erlaube PostgreSQL (Port 5432) von den Security-Groups der Backend-EC2
-- **DB-Name:** `acmdb`
+- **DB-Name:** `database-acm`
 - **Master-Username:** `acm_admin`
 - **Master-Password:** starkes Passwort via Secrets Manager oder Parameter Store
 
-Nach dem Erstellen die RDS-Endpoint-URL notieren (z. B. `acmdb.xxxxxxx.eu-central-1.rds.amazonaws.com`).
+Nach dem Erstellen die RDS-Endpoint-URL notieren (z. B. `database-acm.xxxxxxx.eu-central-1.rds.amazonaws.com`).
 
 ### 2. EC2 — Backend
 
@@ -74,7 +74,7 @@ git clone <dein-repo-url> /opt/acm-backend
 cd /opt/acm-backend/Backend
 
 # DATABASE_URL auf RDS-Endpoint setzen
-export DATABASE_URL="postgres://acm_admin:<passwort>@acmdb.xxxxxxx.eu-central-1.rds.amazonaws.com:5432/acmdb"
+export DATABASE_URL="postgres://acm_admin:<passwort>@database-acm.xxxxxxx.eu-central-1.rds.amazonaws.com:5432/database-acm"
 export RUST_LOG=info
 
 cargo build --release
@@ -213,7 +213,7 @@ Optional: HTTPS via Let's Encrypt/Certbot einrichten.
 
 | Variable | Beschreibung | Beispiel |
 |---|---|---|
-| `DATABASE_URL` | Connection-String zum RDS | `postgres://acm_admin:pass@acmdb.xxx.rds.amazonaws.com:5432/acmdb` |
+| `DATABASE_URL` | Connection-String zum RDS | `postgres://acm_admin:pass@database-acm.xxx.rds.amazonaws.com:5432/database-acm` |
 | `BACKEND_HOST` | Backend-Bind-Addresse | `0.0.0.0` |
 | `BACKEND_PORT` | Backend-Port | `3000` |
 | `FRONTEND_PORT` | Vite-Dev-Server-Port | `8080` |
