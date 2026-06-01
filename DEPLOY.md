@@ -274,3 +274,4 @@ Die Session-Tokens werden im **Arbeitsspeicher** des Backends gehalten
 | Mixed Content: HTTPS page loads HTTP API | S3 REST-Endpoint (HTTPS) + API (HTTP) | S3 Static Website (HTTP) verwenden statt REST-URL |
 | Fetch failed / Status (null) | EC2-IP geändert oder Security Group blockiert | IP updaten, Security Group prüfen |
 | 403 favicon.svg | Datei fehlt in S3 | Ignorieren oder `public/favicon.svg` ins Repo legen |
+| CORS blockiert nach Backend-Update | Firefox cached Preflight 24h | Inkognito/anderen Browser nutzen; `max_age: 600` verhindert Zukunft |
