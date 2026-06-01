@@ -5,7 +5,7 @@ mod types;
 mod handlers;
 
 use axum::{
-    http::Method,
+    http::{header, Method},
     routing::{delete, get, post, put},
     Router,
 };
@@ -79,7 +79,7 @@ async fn main() -> Result<(), sqlx::Error> {
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
-        .allow_headers(Any);
+        .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE, header::ACCEPT]);
 
     // ─── Routen ───
     // Alle Pfade beginnen mit /acm

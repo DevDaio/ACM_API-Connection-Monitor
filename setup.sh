@@ -33,18 +33,14 @@ if [ ! -f .env ]; then
   read -r -p "BACKEND_PORT         [3000]: " input
   BACKEND_PORT="${input:-3000}"
 
-  read -r -p "FRONTEND_PORT        [8080]: " input
-  FRONTEND_PORT="${input:-8080}"
+  read -r -p "RUST_LOG             [info]: " input
+  RUST_LOG="${input:-info}"
 
-  API_PROXY_TARGET="http://localhost:${BACKEND_PORT}"
-
-  read -r -p "VITE_API_URL         [/acm]: " input
-  VITE_API_URL="${input:-/acm}"
-
+  # ─── Root-.env (Backend / systemd) ───
   cat > .env <<-EOF
-# ─── ACM API Connection Monitor ───
-# Alle IPs/Ports/Verbindungen werden hier zentral konfiguriert.
-# Das Backend liest zur Laufzeit, Vite zur Build-/Dev-Zeit.
+# ─── ACM API Connection Monitor — Backend ───
+# Wird via EnvironmentFile= von systemd geladen (EC2).
+# Setze DATABASE_URL auf den RDS-Endpoint, nicht localhost!
 
 POSTGRES_USER=${POSTGRES_USER}
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -55,13 +51,35 @@ DATABASE_URL=${DATABASE_URL}
 BACKEND_HOST=${BACKEND_HOST}
 BACKEND_PORT=${BACKEND_PORT}
 
+RUST_LOG=${RUST_LOG}
+EOF
+
+  echo "✅ .env (Backend) wurde erstellt"
+  echo ""
+fi
+
+# ─── Frontend/.env (Vite-Build) ───
+if [ ! -f Frontend/.env ]; then
+  read -r -p "FRONTEND_PORT        [8080]: " input
+  FRONTEND_PORT="${input:-8080}"
+
+  read -r -p "VITE_API_URL (Dev)   [/acm]: " input
+  VITE_API_URL="${input:-/acm}"
+
+  cat > Frontend/.env <<-EOF
+# ─── ACM API Connection Monitor — Frontend ───
+# Wird von Vite zur Build-Zeit gelesen (import.meta.env).
+# In Production: VITE_API_URL auf EC2-Public-IP setzen.
+# Bei EC2-Stop/Start ändert sich die IP → updaten + neu bauen + deployen.
+
 FRONTEND_PORT=${FRONTEND_PORT}
-API_PROXY_TARGET=${API_PROXY_TARGET}
+
+API_PROXY_TARGET=http://localhost:${BACKEND_PORT:-3000}
 
 VITE_API_URL=${VITE_API_URL}
 EOF
 
-  echo "✅ .env wurde erstellt"
+  echo "✅ Frontend/.env (Frontend) wurde erstellt"
   echo ""
 fi
 

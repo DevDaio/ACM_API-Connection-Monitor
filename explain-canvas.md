@@ -8,14 +8,14 @@
 
 ```mermaid
 graph TD
-    U["Browser / Nutzer"] -->|"HTTP :8080"| FE["Frontend (React + Vite)"]
+    U["Browser / Nutzer"] -->|"HTTP"| FE["S3 Static Website<br/>(React SPA)"]
     FE -->|"HTTP/JSON :3000"| GW["Axum-Gateway (main.rs)"]
     GW -->|"sqlx (PgPool)"| DB[("PostgreSQL-Datenbank")]
     GW -->|"RwLock"| SESS["Sitzungen (HashMap &lt;Token, Nutzer-ID&gt;)"]
     GW -->|"tokio::spawn"| ML["Überwachungs-Schleife (async_services.rs)"]
     ML -->|"HTTP / TCP / ICMP (je nach check_type)"| TGT["Ziel-APIs / Hosts / Ports"]
     ML -->|"INSERT INTO log"| DB
-    GW -->|".layer(cors)"| CORS["CORS: jede Quelle, jeder Header"]
+    GW -->|".layer(cors)"| CORS["CORS: AllowOrigin(Any), explizite Header"]
 
     style FE fill:#1a3a5c,color:#fff
     style GW fill:#5c2d91,color:#fff
@@ -28,7 +28,7 @@ graph TD
 
 | Ebene | Technologie | Datei(en) |
 |-------|-------------|-----------|
-| Frontend | React 19 + Vite + Tailwind | `Frontend/src/` |
+| Frontend | React 19 + Vite + Tailwind (S3 Static Website) | `Frontend/src/` |
 | Backend | Axum (Rust, asynchron) | `Backend/src/main.rs` |
 | Handler | Axum-Routen-Handler | `Backend/src/handlers.rs` |
 | DB-Ebene | sqlx (zur Compilezeit geprüft) | `Backend/src/service_modules/async_services.rs` |
@@ -560,7 +560,7 @@ flowchart TD
     POOL --> TABELLEN_ANLEG["CREATE TABLE IF NOT EXISTS × 5<br/>+ ALTER TABLE Migrationen"]
     TABELLEN_ANLEG --> UEBERWACH_START["tokio::spawn(async move {<br/>run_monitoring_loop(pool).await<br/>})"]
     UEBERWACH_START --> ZUSTAND_BAU["Arc::new(AppState {<br/>pool,<br/>sessions: RwLock::new(HashMap::new())<br/>})"]
-    ZUSTAND_BAU --> CORS["CorsLayer::new()<br/>.allow_origin(Any)<br/>.allow_methods(GET,POST,PUT,DELETE)<br/>.allow_headers(Any)"]
+    ZUSTAND_BAU -->     CORS["CorsLayer::new()<br/>.allow_origin(Any)<br/>.allow_methods(GET,POST,PUT,DELETE)<br/>.allow_headers([AUTHORIZATION, CONTENT_TYPE, ACCEPT])"]
     CORS --> ROUTEN["Router::new()<br/>.route('/acm', ...) × 13<br/>.layer(cors)<br/>.with_state(zustand)"]
     ROUTEN --> BINDEN["BACKEND_HOST / BACKEND_PORT<br/>→ Standard: 0.0.0.0:3000"]
     BINDEN --> BEDIEN["axum::serve(listener, app).await"]
@@ -572,19 +572,30 @@ flowchart TD
     style CORS fill:#8b4513,color:#fff
 ```
 
-**Konfig-Übersicht:**
+**Konfig-Übersicht (zwei `.env`-Dateien):**
+
+**Root `/.env` (Backend / systemd):**
 
 | Variable | Standard | Zweck |
 |----------|---------|-------|
-| `DATABASE_URL` | `postgres://admin:admin@localhost:5432/mydb` | PostgreSQL-Verbindung |
+| `DATABASE_URL` | `postgres://postgres:admin123!@localhost:5432/database_acm` | PostgreSQL-Verbindung |
 | `BACKEND_HOST` | `0.0.0.0` | Server-Bind-IP |
 | `BACKEND_PORT` | `3000` | Server-Port |
-| `VITE_API_URL` | `/acm` (Vite-Proxy) | Frontend-API-Basis-URL |
+| `RUST_LOG` | `info` | Log-Level |
+
+**`Frontend/.env` (Vite-Build):**
+
+| Variable | Standard | Zweck |
+|----------|---------|-------|
+| `VITE_API_URL` | `http://localhost:3000/acm` | API-Basis-URL (wird ins JS-Bundle eingebrannt) |
+| `FRONTEND_PORT` | `8080` | Vite-Dev-Server-Port |
+| `API_PROXY_TARGET` | `http://localhost:3000` | Vite-Proxy-Ziel (Dev) |
 
 **CORS-Konfiguration:**
-- `allow_origin(Any)` — jede Domain darf anfragen (Entwicklung)
+- `allow_origin(Any)` — jede Domain darf anfragen (S3 + EC2)
 - `allow_methods([GET, POST, PUT, DELETE])` — alle CRUD-Operationen
-- `allow_headers(Any)` — beliebige Header (v.a. `Authorization` für Bearer-Token)
+- `allow_headers([AUTHORIZATION, CONTENT_TYPE, ACCEPT])` — **explizit** (Browser ignoriert `*` für `Authorization`)
+- Fix: `allow_headers(Any)` → explizite Liste wegen Browser-Restriktionen bei Auth-Header
 
 ---
 
@@ -625,6 +636,9 @@ ACM_API-Connection-Monitor/
 │       │   └── ThemeSwitcher.jsx        # Theme-Dropdown
 │       └── utils/
 │           └── helpers.js              # fmtDuration, fmtInterval, normalizeUrl, mapEndpoints
-└── DB/
-    └── createTables.sql                # SQL-Referenz (5 Tabellen)
+├── DB/
+│   └── createTables.sql                # SQL-Referenz (5 Tabellen)
+├── .env                                # Backend-Konfiguration (systemd)
+└── Frontend/
+    └── .env                            # Vite-Build-Konfiguration (VITE_API_URL)
 ```

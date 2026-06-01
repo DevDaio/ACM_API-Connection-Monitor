@@ -29,15 +29,22 @@
 
 **1. Umgebungsvariablen konfigurieren**
 
-`.env` im Projekt-Root anlegen (siehe `.env` als Vorlage) und Werte anpassen:
-```bash
-DATABASE_URL=postgres://postgres:admin123!@localhost:5432/database-acm
-BACKEND_HOST=0.0.0.0
-BACKEND_PORT=3000
-FRONTEND_PORT=8080
-API_PROXY_TARGET=http://localhost:3000
-VITE_API_URL=/acm
-```
+Zwei `.env`-Dateien:
+
+- **`/.env`** (Projekt-Root) — fürs Backend (wird von systemd geladen):
+  ```bash
+  DATABASE_URL=postgres://postgres:admin123!@localhost:5432/database-acm
+  BACKEND_HOST=0.0.0.0
+  BACKEND_PORT=3000
+  RUST_LOG=info
+  ```
+
+- **`Frontend/.env`** — für Vite-Build (wichtig für Production!):
+  ```bash
+  VITE_API_URL=/acm
+  FRONTEND_PORT=8080
+  API_PROXY_TARGET=http://localhost:3000
+  ```
 
 **2. Backend starten**
 ```bash
@@ -149,7 +156,9 @@ log (endpointid, status, statusdate, statustime, url, check_type)  # status/url/
 ├── DEPLOY.md                       # AWS-Deployment-Anleitung
 ├── To-Do.md                        # Projekt-Tracking
 ├── explain-canvas.md               # Architektur-Diagramme
-└── .env                            # Konfiguration
+├── .env                            # Backend-Konfiguration (systemd)
+└── Frontend/
+    └── .env                        # Vite-Build-Konfiguration
 ```
 
 ## Reference
@@ -213,9 +222,15 @@ log (endpointid, status, statusdate, statustime, url, check_type)  # status/url/
 | `api` | `api.js` | HTTP-Client mit Token-Management |
 | `helpers` | `utils/helpers.js` | `normalizeUrl()`, `mapEndpoints()`, `fmtDuration()` |
 
-## Deployment
+## Deployment (AWS)
 
-Siehe [DEPLOY.md](DEPLOY.md) für AWS RDS + EC2 Step-by-Step und Umgebungsvariablen.
+Siehe [DEPLOY.md](DEPLOY.md) für AWS:
+
+- **Frontend:** S3 Static Website (HTTP) — gebaut mit Vite, deployed via `aws s3 sync`
+- **Backend:** Rust/Axum auf EC2 — Port 3000, systemd-Service
+- **Datenbank:** RDS PostgreSQL
+- **Wichtig:** EC2-Public-IP wechselt bei Stop/Start → Frontend neu bauen + deployen nötig
+- **CORS:** Explizite Header (Authorization, Content-Type, Accept) — kein `*`
 
 ## Entwickler
 
