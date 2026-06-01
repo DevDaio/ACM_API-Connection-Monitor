@@ -11,6 +11,7 @@ use axum::{
 };
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
+use std::time::Duration;
 use tower_http::cors::{Any, CorsLayer};
 use sqlx::postgres::PgPoolOptions;
 
@@ -79,7 +80,8 @@ async fn main() -> Result<(), sqlx::Error> {
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
-        .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE, header::ACCEPT]);
+        .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE, header::ACCEPT])
+        .max_age(Duration::from_secs(600));
 
     // ─── Routen ───
     // Alle Pfade beginnen mit /acm
