@@ -7,23 +7,39 @@
 ## 1. Gesamtbild — Architektur-Übersicht
 
 ```mermaid
-graph TD
-    U["Browser / Nutzer"] -->|"HTTP"| N["EC2 Nginx:80<br/>(Reverse-Proxy)"]
-    N -->|"/ → proxy_pass"| FE["S3 Static Website<br/>(React SPA)"]
-    N -->|"/acm/* → proxy_pass"| GW["Axum-Gateway (main.rs)"]
-    GW -->|"sqlx (PgPool)"| DB[("PostgreSQL-Datenbank")]
-    GW -->|"RwLock"| SESS["Sitzungen (HashMap &lt;Token, Nutzer-ID&gt;)"]
-    GW -->|"tokio::spawn"| ML["Überwachungs-Schleife (async_services.rs)"]
-    ML -->|"HTTP / TCP / ICMP (je nach check_type)"| TGT["Ziel-APIs / Hosts / Ports"]
+graph TB
+    U["🌐 Browser / Nutzer<br/>http://&lt;EC2-IP&gt;"] -->|"HTTP Port 80"| N["🔄 EC2 Nginx:80<br/>(Reverse-Proxy)"]
+
+    subgraph NGINX["EC2-Instanz (Nginx-Routing)"]
+        N -->|"`/*` → proxy_pass"| FE["📦 S3 Static Website<br/>(React SPA – gehostet im Bucket)"]
+        N -->|"`/acm/*` → proxy_pass"| GW["⚙️ Rust/Axum API<br/>localhost:3000<br/>(systemd-Service)"]
+    end
+
+    subgraph BACKEND["Backend-Interna"]
+        GW -->|"sqlx (PgPool)"| DB[("💾 PostgreSQL Datenbank<br/>(AWS RDS – nur intern)")]
+        GW -->|"RwLock"| SESS["📋 Sitzungen<br/>(HashMap &lt;Token, UserID&gt;)"]
+        GW -->|"tokio::spawn"| ML["🔍 Überwachungs-Schleife<br/>(async_services.rs)"]
+    end
+
+    ML -->|"HTTP / TCP / ICMP<br/>(je nach check_type)"| TGT["🎯 Ziel-APIs / Hosts / Ports"]
     ML -->|"INSERT INTO log"| DB
 
-    style N fill:#5bc0de,color:#000
+    style N fill:#ffa500,color:#000,stroke:#333
     style FE fill:#1a3a5c,color:#fff
     style GW fill:#5c2d91,color:#fff
     style DB fill:#2d5a27,color:#fff
     style ML fill:#8b4513,color:#fff
     style SESS fill:#a04040,color:#fff
+    style TGT fill:#666,color:#fff
 ```
+
+**Datenfluss:**
+1. Nutzer öffnet `http://&lt;EC2-IP&gt;` im Browser
+2. Nginx serviert React-SPA aus dem S3-Bucket (kein Cross-Origin)
+3. API-Calls (`/acm/login`, `/acm/log?id=5`, etc.) gehen als **relative Pfade**
+4. Nginx fängt `/acm/*` und leitet an `localhost:3000` weiter
+5. Rust-Backend verarbeitet die Anfrage (DB, Session, Monitoring)
+6. **Same-Origin** → kein CORS, kein Preflight, kein uBlock-Problem
 
 **Komponenten:**
 

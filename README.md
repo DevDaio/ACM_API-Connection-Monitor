@@ -14,13 +14,48 @@
 - **Themes** — Farbschema umschaltbar (Lava Red / Hacker Green / Void Purple)
 - **Spaceship-Cockpit-Design** — Brutalistisch-futuristisches HUD
 
+## Architektur (Production)
+
+```
+                        ┌──────────────────────────────────────┐
+                        │         Browser / Nutzer             │
+                        │      http://<EC2-PUBLIC-IP>          │
+                        └──────────────┬───────────────────────┘
+                                       │ HTTP
+                                       ▼
+                        ┌──────────────────────────────────────┐
+                        │        EC2 Nginx (Port 80)           │
+                        │         Reverse-Proxy                │
+                        │                                      │
+                        │  / → S3 (Frontend)                   │
+                        │  /acm/* → localhost:3000 (Backend)   │
+                        └──────┬───────────────────┬───────────┘
+                               │                   │
+                    ┌──────────▼──────┐    ┌──────▼────────────┐
+                    │  S3 Static     │    │  Rust/Axum API     │
+                    │  Website       │    │  localhost:3000    │
+                    │  (React SPA)   │    │  (systemd-Service) │
+                    └─────────────────┘    └──────┬────────────┘
+                                                   │ sqlx
+                                                   ▼
+                                        ┌──────────────────────┐
+                                        │  RDS PostgreSQL 17   │
+                                        └──────────────────────┘
+```
+
+- **Frontend & Backend** laufen unter derselben IP → **same-origin, kein CORS**
+- **Nginx** routet `/` → S3 Bucket (Frontend) und `/acm/*` → localhost:3000 (Backend)
+- EC2-IP bleibt bei **Reboot** erhalten, wechselt bei Stop/Start
+
 ## Tech-Stack
 
 | Komponente | Technologie |
 |---|---|
 | **Frontend** | React 19 + Vite + Tailwind CSS v4 |
 | **Backend** | Rust + Axum + Tokio + sqlx |
-| **Datenbank** | PostgreSQL 17 |
+| **Reverse-Proxy** | Nginx |
+| **Datenbank** | PostgreSQL 17 auf RDS |
+| **Hosting** | EC2 (Backend + Nginx), S3 (Frontend Static Files) |
 | **Monitoring** | HTTP / TCP / ICMP im Hintergrund-Task |
 
 ## Schnellstart (Entwicklung)
