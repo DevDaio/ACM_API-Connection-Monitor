@@ -11,8 +11,8 @@ graph TB
     U["🌐 Browser / Nutzer<br/>http://&lt;EC2-IP&gt;"] -->|"HTTP Port 80"| N["🔄 EC2 Nginx:80<br/>(Reverse-Proxy)"]
 
     subgraph NGINX["EC2-Instanz (Nginx-Routing)"]
-        N -->|"`/*` → proxy_pass"| FE["📦 S3 Static Website<br/>(React SPA – gehostet im Bucket)"]
-        N -->|"`/acm/*` → proxy_pass"| GW["⚙️ Rust/Axum API<br/>localhost:3000<br/>(systemd-Service)"]
+        N -->|"/ → proxy_pass"| FE["📦 S3 Static Website<br/>(React SPA – gehostet im Bucket)"]
+        N -->|"/acm/ → proxy_pass"| GW["⚙️ Rust/Axum API<br/>localhost:3000<br/>(systemd-Service)"]
     end
 
     subgraph BACKEND["Backend-Interna"]
