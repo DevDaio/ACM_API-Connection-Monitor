@@ -22,10 +22,13 @@ if (savedToken) _token = savedToken;
 async function request(method, path, body) {
   const opts = {
     method,
-    headers: { 'Content-Type': 'application/json' },
+    headers: {},
   };
   if (_token) opts.headers['Authorization'] = `Bearer ${_token}`;
-  if (body) opts.body = JSON.stringify(body);
+  if (body) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
 
   const res = await fetch(`${BASE}${path}`, opts);
   const data = await res.json();

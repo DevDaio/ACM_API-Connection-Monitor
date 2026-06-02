@@ -8,16 +8,19 @@
 
 ```mermaid
 graph TD
-    U["Browser / Nutzer"] -->|"HTTP"| FE["S3 Static Website<br/>(React SPA)"]
-    FE -->|"HTTP/JSON :3000"| GW["Axum-Gateway (main.rs)"]
+    U["Browser / Nutzer"] -->|"HTTPS"| CF["CloudFront (CDN)"]
+    CF -->|"/*"| FE["S3 Static Website<br/>(React SPA)"]
+    CF -->|"/acm/*"| N["EC2 Nginx:80<br/>(Reverse-Proxy)"]
+    N -->|"proxy_pass localhost:3000"| GW["Axum-Gateway (main.rs)"]
     GW -->|"sqlx (PgPool)"| DB[("PostgreSQL-Datenbank")]
     GW -->|"RwLock"| SESS["Sitzungen (HashMap &lt;Token, Nutzer-ID&gt;)"]
     GW -->|"tokio::spawn"| ML["Überwachungs-Schleife (async_services.rs)"]
     ML -->|"HTTP / TCP / ICMP (je nach check_type)"| TGT["Ziel-APIs / Hosts / Ports"]
     ML -->|"INSERT INTO log"| DB
-    GW -->|".layer(cors)"| CORS["CORS: AllowOrigin(Any), explizite Header"]
 
+    style CF fill:#f0ad4e,color:#000
     style FE fill:#1a3a5c,color:#fff
+    style N fill:#5bc0de,color:#000
     style GW fill:#5c2d91,color:#fff
     style DB fill:#2d5a27,color:#fff
     style ML fill:#8b4513,color:#fff
@@ -28,8 +31,8 @@ graph TD
 
 | Ebene | Technologie | Datei(en) |
 |-------|-------------|-----------|
-| Frontend | React 19 + Vite + Tailwind (S3 Static Website) | `Frontend/src/` |
-| Backend | Axum (Rust, asynchron) | `Backend/src/main.rs` |
+| Frontend | React 19 + Vite + Tailwind (S3 via CloudFront, HTTPS) | `Frontend/src/` |
+| Backend | Axum (Rust, asynchron) hinter Nginx Reverse-Proxy | `Backend/src/main.rs` |
 | Handler | Axum-Routen-Handler | `Backend/src/handlers.rs` |
 | DB-Ebene | sqlx (zur Compilezeit geprüft) | `Backend/src/service_modules/async_services.rs` |
 | Überwachung | Tokio-Task + reqwest / TcpStream / system ping | `async_services.rs:run_monitoring_loop()` |
@@ -560,9 +563,9 @@ flowchart TD
     POOL --> TABELLEN_ANLEG["CREATE TABLE IF NOT EXISTS × 5<br/>+ ALTER TABLE Migrationen"]
     TABELLEN_ANLEG --> UEBERWACH_START["tokio::spawn(async move {<br/>run_monitoring_loop(pool).await<br/>})"]
     UEBERWACH_START --> ZUSTAND_BAU["Arc::new(AppState {<br/>pool,<br/>sessions: RwLock::new(HashMap::new())<br/>})"]
-    ZUSTAND_BAU -->     CORS["CorsLayer::new()<br/>.allow_origin(Any)<br/>.allow_methods(GET,POST,PUT,DELETE)<br/>.allow_headers([AUTHORIZATION, CONTENT_TYPE, ACCEPT])"]
+    ZUSTAND_BAU -->     CORS["CorsLayer::new() (optional)<br/>→ same-origin via CloudFront<br/>→ CORS nicht mehr zwingend nötig"]
     CORS --> ROUTEN["Router::new()<br/>.route('/acm', ...) × 13<br/>.layer(cors)<br/>.with_state(zustand)"]
-    ROUTEN --> BINDEN["BACKEND_HOST / BACKEND_PORT<br/>→ Standard: 0.0.0.0:3000"]
+    ROUTEN --> BINDEN["BACKEND_HOST / BACKEND_PORT<br/>→ Production: 127.0.0.1:3000 (nur localhost)"]
     BINDEN --> BEDIEN["axum::serve(listener, app).await"]
 
     DOTENV -.->|".env-Variablen"| HOST["BACKEND_HOST<br/>BACKEND_PORT<br/>DATABASE_URL"]
@@ -587,15 +590,14 @@ flowchart TD
 
 | Variable | Standard | Zweck |
 |----------|---------|-------|
-| `VITE_API_URL` | `http://localhost:3000/acm` | API-Basis-URL (wird ins JS-Bundle eingebrannt) |
+| `VITE_API_URL` | *(leer)* | API-Basis-URL (wird ins JS-Bundle eingebrannt). In Production leer lassen → `/acm` relativ via CloudFront |
 | `FRONTEND_PORT` | `8080` | Vite-Dev-Server-Port |
 | `API_PROXY_TARGET` | `http://localhost:3000` | Vite-Proxy-Ziel (Dev) |
 
-**CORS-Konfiguration:**
-- `allow_origin(Any)` — jede Domain darf anfragen (S3 + EC2)
-- `allow_methods([GET, POST, PUT, DELETE])` — alle CRUD-Operationen
-- `allow_headers([AUTHORIZATION, CONTENT_TYPE, ACCEPT])` — **explizit** (Browser ignoriert `*` für `Authorization`)
-- Fix: `allow_headers(Any)` → explizite Liste wegen Browser-Restriktionen bei Auth-Header
+**CORS-Konfiguration (aktuell):**
+- `allow_origin(Any)` — aktuell noch gesetzt, wird aber nicht mehr gebraucht
+- Alle Requests laufen via CloudFront → **same-origin** → CORS ist faktisch obsolet
+- Kann in Zukunft komplett entfernt oder für lokale Entwicklung beibehalten werden
 
 ---
 
@@ -638,7 +640,10 @@ ACM_API-Connection-Monitor/
 │           └── helpers.js              # fmtDuration, fmtInterval, normalizeUrl, mapEndpoints
 ├── DB/
 │   └── createTables.sql                # SQL-Referenz (5 Tabellen)
+├── EC2/
+│   └── nginx/
+│       └── acm-backend.conf            # Nginx Reverse-Proxy (CloudFront → localhost:3000)
 ├── .env                                # Backend-Konfiguration (systemd)
 └── Frontend/
-    └── .env                            # Vite-Build-Konfiguration (VITE_API_URL)
+    └── .env                            # Vite-Build-Konfiguration (VITE_API_URL leer lassen)
 ```

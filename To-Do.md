@@ -15,11 +15,12 @@ kanban-plugin: board
 
 ## Deployment (Aktuell)
 
-- [x] Frontend: S3 Static Website (HTTP) + `Frontend/.env` für VITE_API_URL
-- [x] Backend: EC2 + systemd-Service (Port 3000)
+- [x] Frontend: S3 Static Website (HTTP) + CloudFront (HTTPS)
+- [x] Backend: EC2 + Nginx Reverse-Proxy + systemd-Service (Port 3000)
 - [x] DB: RDS PostgreSQL
-- [ ] Automatisches Deploy-Skript bei IP-Wechsel (EC2 Stop/Start)
-- [ ] Elastic IP beantragen (Permissions im Schul-Account prüfen)
+- [x] Elastic IP (feste Adresse für CloudFront-Origin)
+- [ ] CloudFront: OAC-Konfiguration prüfen
+- [ ] Nach Migration: CORS-Konfiguration verschlanken (same-origin)
 
 ---
 

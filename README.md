@@ -39,12 +39,13 @@ Zwei `.env`-Dateien:
   RUST_LOG=info
   ```
 
-- **`Frontend/.env`** — für Vite-Build (wichtig für Production!):
+- **`Frontend/.env`** — für Vite-Build:
   ```bash
-  VITE_API_URL=/acm
   FRONTEND_PORT=8080
   API_PROXY_TARGET=http://localhost:3000
   ```
+  > In Production: `VITE_API_URL` leer lassen → relativer Pfad `/acm/...`,
+  > CloudFront routet `/acm/*` zum Backend (same-origin).
 
 **2. Backend starten**
 ```bash
@@ -150,6 +151,10 @@ log (endpointid, status, statusdate, statustime, url, check_type)  # status/url/
 │   ├── createTables.sql            # DB-Init
 │   └── data/                       # DB-Daten (lokal, gitignored)
 │
+├── EC2/
+│   └── nginx/
+│       └── acm-backend.conf        # Nginx Reverse-Proxy Config (CloudFront → EC2)
+│
 ├── setup.sh                        # Ein-Klick-Build
 ├── start-dev.sh                    # Backend + Frontend parallel starten
 ├── docker-compose.yml              # Postgres + Backend + Frontend
@@ -226,11 +231,11 @@ log (endpointid, status, statusdate, statustime, url, check_type)  # status/url/
 
 Siehe [DEPLOY.md](DEPLOY.md) für AWS:
 
-- **Frontend:** S3 Static Website (HTTP) — gebaut mit Vite, deployed via `aws s3 sync`
-- **Backend:** Rust/Axum auf EC2 — Port 3000, systemd-Service
-- **Datenbank:** RDS PostgreSQL
-- **Wichtig:** EC2-Public-IP wechselt bei Stop/Start → Frontend neu bauen + deployen nötig
-- **CORS:** Explizite Header (Authorization, Content-Type, Accept) — kein `*`
+- **Frontend:** S3 Static Website → **CloudFront** (HTTPS) — gebaut mit Vite, deployed via `aws s3 sync`
+- **Backend:** Rust/Axum auf EC2 (Port 3000) hinter **Nginx Reverse-Proxy** (Port 80)
+- **Datenbank:** RDS PostgreSQL (nur intern)
+- **CloudFront:** Einheitlicher HTTPS-Endpunkt, routet `/*` → S3 und `/acm/*` → EC2
+- **CORS:** Nicht mehr nötig — alles same-origin via CloudFront
 
 ## Entwickler
 

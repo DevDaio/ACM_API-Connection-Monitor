@@ -8,7 +8,7 @@
 
 Zwei `.env`-Dateien:
 - **`/.env`** (Projekt-Root) → `DATABASE_URL`, `BACKEND_PORT` etc. fürs Backend
-- **`Frontend/.env`** → `VITE_API_URL` für Vite-Build (wichtig für Production!)
+- **`Frontend/.env`** → `VITE_API_URL` für Vite-Build (in Production leer lassen)
 
 **2. Backend starten**
 ```bash
@@ -28,24 +28,30 @@ npm run dev
 open http://localhost:8080
 ```
 
+---
+
 ## Deployment auf AWS — Architektur
 
 ```
-Browser ──HTTP──→ S3 Static Website ──HTTP──→ EC2 (Port 3000) ──intern──→ RDS PostgreSQL
-                     (Frontend)                 (Backend + optional Nginx)
+Browser ──HTTPS──→ CloudFront
+                      │
+                      ├── /*       → S3 Static Website (Custom Origin)
+                      │
+                      └── /acm/*   → EC2 Nginx:80 → proxy → localhost:3000
+                                                              │
+                                                              └── RDS PostgreSQL
 ```
 
-- **Frontend:** React SPA → gebaut mit Vite → gehostet auf **S3 Static Website** (HTTP)
-- **Backend:** Rust/Axum API auf einer **EC2-Instanz** (Port 3000, direkt oder via Nginx)
-- **Datenbank:** PostgreSQL 17 via AWS RDS
-- **CORS:** Backend erlaubt explizit `Authorization`, `Content-Type`, `Accept`-Header
+- **Frontend:** React SPA → gebaut mit Vite → gehostet auf **S3 Static Website** → ausgeliefert via **CloudFront** (HTTPS)
+- **Backend:** Rust/Axum API auf **EC2** (Port 3000) hinter **Nginx Reverse-Proxy** (Port 80)
+- **Datenbank:** PostgreSQL 17 via **AWS RDS** (nur intern erreichbar)
+- **CloudFront:** Einheitlicher HTTPS-Endpunkt, routet `/*` → S3 und `/acm/*` → EC2
+- **CORS:** Nicht mehr nötig – Frontend und Backend laufen unter derselben CloudFront-Domain
 
-### Wichtig: EC2 Public IP
+### Elastic IP
 
-EC2-Public-IP wechselt bei jedem **Stop/Start**. Lösung:
-- **Nur Reboot** verwenden (Reboot behält die IP)
-- Nach Stop/Start: `Frontend/.env` mit neuer IP updaten, Frontend neu bauen + nach S3 deployen
-- Elastic IP ist empfohlen, aber im Schul-Account oft nicht erlaubt
+Die EC2-Instanz braucht eine **Elastic IP** (feste öffentliche IP), damit der CloudFront-Origin
+stabil bleibt. Elastic IPs sind kostenlos, solange sie einer laufenden Instanz zugeordnet sind.
 
 ---
 
@@ -67,20 +73,32 @@ Nach dem Erstellen die RDS-Endpoint-URL notieren (z. B. `database-acm.xxxxxxx.
 
 ---
 
-### 2. EC2 — Backend
+### 2. Elastic IP
+
+1. **AWS Console → EC2 → Elastic IPs → Elastic IP-Adresse zuweisen**
+2. **Region:** `eu-west-1` (gleiche Region wie EC2)
+3. Die Elastic IP der EC2-Instanz zuordnen
+4. Die IP notieren (wird für CloudFront-Origin und nginx gebraucht)
+
+---
+
+### 3. EC2 — Backend + Nginx
 
 #### Instanz starten
 
 - **AMI:** Amazon Linux 2023
 - **Typ:** t3.medium (2 vCPU, 4 GB RAM)
-- **Security Group:** Port 3000 (API) und Port 22 (SSH) von überall (`0.0.0.0/0`)
+- **Security Group:**
+  - Port 22 (SSH) von deiner IP (`/32`)
+  - Port 80 (HTTP) von `0.0.0.0/0` (CloudFront greift auf Port 80 zu)
+  - Port 3000 nur für internen Zugriff (nginx → localhost)
 - **Storage:** 20 GB gp3
 
 #### Abhängigkeiten & Setup
 
 ```bash
-sudo yum update -y
-sudo yum install -y git
+sudo dnf update -y
+sudo dnf install -y git nginx
 
 # Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -98,8 +116,20 @@ export DATABASE_URL="postgres://acm_admin:<passwort>@database-acm.xxxxxxx.eu-wes
 export RUST_LOG=info
 
 cargo build --release
-./target/release/Backend
 ```
+
+#### Nginx Reverse-Proxy konfigurieren
+
+```bash
+# Config aus dem Repo kopieren
+sudo cp /home/ec2-user/ACM_API-Connection-Monitor/EC2/nginx/acm-backend.conf /etc/nginx/conf.d/
+
+# Syntax prüfen und starten
+sudo nginx -t
+sudo systemctl enable --now nginx
+```
+
+Der nginx lauscht auf Port 80 und leitet `/acm/*` an `http://127.0.0.1:3000` weiter.
 
 #### Systemd-Service (Production)
 
@@ -107,7 +137,7 @@ cargo build --release
 # /etc/systemd/system/acm-backend.service
 [Unit]
 Description=ACM Backend
-After=network.target
+After=network.target nginx.service
 
 [Service]
 Type=simple
@@ -122,13 +152,16 @@ Restart=always
 WantedBy=multi-user.target
 ```
 
-**.env auf der EC2** muss `DATABASE_URL` auf den RDS-Endpoint zeigen (nicht localhost):
+**`.env` auf der EC2**:
 ```env
 DATABASE_URL=postgres://acm_admin:pass@database-acm.xxxxxxx.eu-west-1.rds.amazonaws.com:5432/database-acm
-BACKEND_HOST=0.0.0.0
+BACKEND_HOST=127.0.0.1
 BACKEND_PORT=3000
 RUST_LOG=info
 ```
+
+> **Wichtig:** `BACKEND_HOST=127.0.0.1` – der Rust-Server bindet nur localhost,
+> damit nur nginx (und nicht direkt das Internet) darauf zugreifen kann.
 
 ```bash
 sudo systemctl daemon-reload
@@ -139,7 +172,7 @@ sudo journalctl -u acm-backend -f   # Logs live verfolgen
 #### Backend neustarten (nach Code-Änderungen)
 
 ```bash
-ssh ec2-user@<EC2-IP>
+ssh ec2-user@<ELASTIC-IP>
 cd ACM_API-Connection-Monitor && git pull
 cd Backend && cargo build --release
 sudo systemctl restart acm-backend
@@ -147,7 +180,7 @@ sudo systemctl restart acm-backend
 
 ---
 
-### 3. S3 Static Website — Frontend
+### 4. S3 Static Website — Frontend
 
 #### Bucket erstellen
 
@@ -177,15 +210,12 @@ sudo systemctl restart acm-backend
      ]
    }
    ```
-   Falls der Schul-Account keine Public Policies erlaubt: mit `--acl public-read` hochladen.
 
 #### Frontend lokal bauen & deployen
 
-**`Frontend/.env`** setzen (Vite liest nur diese Datei!):
-```env
-VITE_API_URL=http://<AKTUELLE-EC2-IP>:3000/acm
-```
-> **Wichtig:** Bei EC2-Stop/Start ändert sich die IP → `Frontend/.env` updaten + neu bauen + deployen.
+**`Frontend/.env`**: `VITE_API_URL` leer lassen oder auskommentieren →
+der Frontend-Code verwendet den relativen Pfad `/acm/...`.
+CloudFront routet `/acm/*` automatisch zum Backend.
 
 ```bash
 cd Frontend
@@ -194,65 +224,110 @@ npm run build
 aws s3 sync dist/ s3://acm-fe-bucket/ --delete --acl public-read
 ```
 
-Danach im Browser öffnen: `http://acm-fe-bucket.s3-website-eu-west-1.amazonaws.com`
+---
+
+### 5. CloudFront Distribution
+
+Eine CloudFront-Distribution bündelt S3 (Frontend) und EC2 (Backend)
+unter einer gemeinsamen HTTPS-Domain.
+
+#### Distribution erstellen
+
+**AWS Console → CloudFront → Distribution erstellen**
+
+**Origin 1 — S3 (Frontend):**
+| Einstellung | Wert |
+|---|---|
+| Origin Domain | `acm-fe-bucket.s3-website-eu-west-1.amazonaws.com` |
+| Protocol | HTTP only (S3 Static Website spricht nur HTTP) |
+| Origin Path | leer lassen |
+
+> **Hinweis:** Wir verwenden den **S3 Website-Endpoint** (nicht den REST-Endpoint),
+> weil Static Website Hosting aktiviert ist. Dementsprechend wird der Origin als
+> **Custom Origin** konfiguriert, nicht als S3 Origin.
+
+**Origin 2 — EC2 (Backend):**
+| Einstellung | Wert |
+|---|---|
+| Origin Domain | `<ELASTIC-IP>` (z.B. `18.192.100.50`) |
+| Protocol | HTTP only |
+| Origin Path | leer lassen |
+
+**Default Behavior (`*` → S3):**
+| Einstellung | Wert |
+|---|---|
+| Origin | S3-Origin |
+| Viewer Protocol Policy | **Redirect HTTP → HTTPS** |
+| Allowed HTTP Methods | GET, HEAD, OPTIONS |
+| Cache Policy | `CachingOptimized` (empfohlen) |
+
+**Behavior (`/acm*` → EC2):**
+| Einstellung | Wert |
+|---|---|
+| Origin | EC2-Origin |
+| Viewer Protocol Policy | **Redirect HTTP → HTTPS** |
+| Allowed HTTP Methods | GET, HEAD, OPTIONS, PUT, POST, DELETE |
+| Cache Policy | **`CachingDisabled`** (API-Responses nicht cachen) |
+| Query Strings | **Forward all, cache based on all** |
+| Headers | **Forward `Authorization`, `Content-Type`** |
+
+#### Nach dem Erstellen
+
+- **Distribution-Domain notieren:** `https://dxxxxxxxxxxxxx.cloudfront.net`
+- **Status abwarten:** Bis `Last Modified` nicht mehr `InProgress` zeigt
+  (ca. 5–10 Minuten)
+
+#### S3 im Browser öffnen
+
+`https://dxxxxxxxxxxxxx.cloudfront.net` → Frontend wird geladen.
+API-Calls gehen als **same-origin** über CloudFront → EC2.
 
 ---
 
-### 4. Nginx auf EC2 (optional, für Reverse-Proxy)
+### 6. Umgebungsvariablen
 
-Nginx kann auf der EC2 als Reverse-Proxy vor dem Backend laufen:
-
-```bash
-sudo yum install -y nginx
-```
-
-```nginx
-# /etc/nginx/conf.d/acm.conf
-server {
-    listen 80;
-    server_name _;
-
-    location /acm/ {
-        proxy_pass http://localhost:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-
-    location / {
-        return 404;
-    }
-}
-```
-
-```bash
-sudo systemctl enable --now nginx
-```
-
-Dann `VITE_API_URL=http://<EC2-IP>/acm` (ohne Port 3000) setzen.
-
----
-
-## Umgebungsvariablen
-
-### Root-`/.env` (für Backend / systemd)
+#### Root-`/.env` (für Backend / systemd)
 
 | Variable | Beschreibung | Beispiel |
 |---|---|---|
 | `DATABASE_URL` | Connection-String zum RDS | `postgres://acm_admin:pass@database-acm.xxx.rds.amazonaws.com:5432/database-acm` |
-| `BACKEND_HOST` | Backend-Bind-Addresse | `0.0.0.0` |
+| `BACKEND_HOST` | Backend-Bind-Addresse | `127.0.0.1` (nur localhost) |
 | `BACKEND_PORT` | Backend-Port | `3000` |
 | `RUST_LOG` | Log-Level (Backend) | `info` |
 
-### `Frontend/.env` (für Vite-Build)
+#### `Frontend/.env` (für Vite-Build)
 
 | Variable | Beschreibung | Beispiel |
 |---|---|---|
-| `VITE_API_URL` | API-Basis-URL (in Production: EC2-IP) | `http://18.192.100.50:3000/acm` |
+| `VITE_API_URL` | leer lassen → relativer Pfad `/acm/...` (CloudFront routet) | *(nicht setzen)* |
 | `FRONTEND_PORT` | Vite-Dev-Server-Port | `8080` |
 | `API_PROXY_TARGET` | Vite-Proxy-Ziel (Dev) | `http://localhost:3000` |
 
-> **Hinweis:** `VITE_API_URL` wird zur Build-Zeit ins JS-Bundle eingebrannt. Nach jeder Änderung muss das Frontend neu gebaut + deployed werden.
+> **Hinweis:** `VITE_API_URL` wird zur Build-Zeit ins JS-Bundle eingebrannt.
+> In Production leer lassen, damit `BASE = '/acm'` genutzt wird.
+
+---
+
+### 7. Nützliche Befehle
+
+```bash
+# Backend-Logs live
+sudo journalctl -u acm-backend -f
+
+# Nginx-Status
+sudo systemctl status nginx
+sudo nginx -t
+
+# Nginx-Logs
+sudo tail -f /var/log/nginx/access.log
+sudo tail -f /var/log/nginx/error.log
+
+# Elastic IP prüfen
+curl -s http://<ELASTIC-IP>/acm
+
+# CloudFront Invalidierung (bei Frontend-Update)
+aws cloudfront create-invalidation --distribution-id <DIST-ID> --paths "/*"
+```
 
 ---
 
@@ -270,8 +345,10 @@ Die Session-Tokens werden im **Arbeitsspeicher** des Backends gehalten
 
 | Problem | Ursache | Lösung |
 |---|---|---|
-| CORS: Authorization blocked | `allow_headers(Any)` → Browser ignoriert `*` | Explizite Header setzen: `allow_headers([AUTHORIZATION, CONTENT_TYPE, ACCEPT])` |
-| Mixed Content: HTTPS page loads HTTP API | S3 REST-Endpoint (HTTPS) + API (HTTP) | S3 Static Website (HTTP) verwenden statt REST-URL |
-| Fetch failed / Status (null) | EC2-IP geändert oder Security Group blockiert | IP updaten, Security Group prüfen |
-| 403 favicon.svg | Datei fehlt in S3 | Ignorieren oder `public/favicon.svg` ins Repo legen |
-| CORS blockiert nach Backend-Update | Firefox cached Preflight 24h | Inkognito/anderen Browser nutzen; `max_age: 600` verhindert Zukunft |
+| CloudFront: 403 Access Denied | S3-Bucket-Policy fehlt oder falsch | Bucket-Policy mit `PublicReadGetObject` prüfen |
+| CloudFront: 502 Bad Gateway (EC2) | EC2 nicht erreichbar oder nginx läuft nicht | Elastic IP prüfen, `sudo systemctl status nginx` |
+| 504 Gateway Timeout | Backend antwortet nicht | `sudo journalctl -u acm-backend -f` prüfen |
+| Fetch failed / Status (null) | CloudFront-Distribution noch im Deployment | Warten bis Status "Deployed" zeigt (5–10 Min) |
+| Frontend lädt, API-Calls schlagen fehl | CloudFront-Verhalten `/acm*` falsch konfiguriert | Behavior `/acm*` prüfen: Query Strings + Headers forwarden |
+| 403 favicon.svg / page refresh 404 | SPA-Routing fehlt | Error document in S3 Static Website auf `index.html` setzen |
+| Backend-Neustart: alle ausgeloggt | In-Memory-Sessions | Neu einloggen – Daten bleiben erhalten |
