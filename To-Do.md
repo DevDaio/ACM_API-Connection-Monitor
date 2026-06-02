@@ -15,12 +15,11 @@ kanban-plugin: board
 
 ## Deployment (Aktuell)
 
-- [x] Frontend: S3 Static Website (HTTP) + CloudFront (HTTPS)
+- [x] Frontend: S3 Static Website via EC2 Nginx Reverse-Proxy
 - [x] Backend: EC2 + Nginx Reverse-Proxy + systemd-Service (Port 3000)
 - [x] DB: RDS PostgreSQL
-- [x] CloudFront + EC2-Public-IP (kein Elastic IP im Sandbox)
-- [ ] Bei IP-Wechsel: CloudFront-Origin updaten dokumentieren
-- [ ] Nach Migration: CORS-Konfiguration verschlanken (same-origin)
+- [x] Nginx: same-origin (kein CORS mehr nötig)
+- [ ] Nach Migration: CORS-Konfiguration im Backend entfernen/verschlanken
 
 ---
 

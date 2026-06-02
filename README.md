@@ -45,7 +45,7 @@ Zwei `.env`-Dateien:
   API_PROXY_TARGET=http://localhost:3000
   ```
   > In Production: `VITE_API_URL` leer lassen → relativer Pfad `/acm/...`,
-  > CloudFront routet `/acm/*` zum Backend (same-origin).
+  > Nginx auf EC2 routet `/acm/*` zum Backend (same-origin).
 
 **2. Backend starten**
 ```bash
@@ -153,7 +153,7 @@ log (endpointid, status, statusdate, statustime, url, check_type)  # status/url/
 │
 ├── EC2/
 │   └── nginx/
-│       └── acm-backend.conf        # Nginx Reverse-Proxy Config (CloudFront → EC2)
+│       └── acm-backend.conf        # Nginx Reverse-Proxy (S3 Frontend + Backend API)
 │
 ├── setup.sh                        # Ein-Klick-Build
 ├── start-dev.sh                    # Backend + Frontend parallel starten
@@ -231,11 +231,11 @@ log (endpointid, status, statusdate, statustime, url, check_type)  # status/url/
 
 Siehe [DEPLOY.md](DEPLOY.md) für AWS:
 
-- **Frontend:** S3 Static Website → **CloudFront** (HTTPS) — gebaut mit Vite, deployed via `aws s3 sync`
-- **Backend:** Rust/Axum auf EC2 (Port 3000) hinter **Nginx Reverse-Proxy** (Port 80)
+- **Frontend:** S3 Static Website → ausgeliefert via **EC2 Nginx Reverse-Proxy** (Port 80)
+- **Backend:** Rust/Axum auf EC2 (Port 3000), ebenfalls hinter Nginx
 - **Datenbank:** RDS PostgreSQL (nur intern)
-- **CloudFront:** Einheitlicher HTTPS-Endpunkt, routet `/*` → S3 und `/acm/*` → EC2
-- **CORS:** Nicht mehr nötig — alles same-origin via CloudFront
+- **Nginx:** Einheitlicher Entrypoint auf Port 80 → routet `/` → S3 und `/acm/*` → Backend
+- **CORS:** Nicht mehr nötig — alles same-origin (eine EC2-IP)
 
 ## Entwickler
 

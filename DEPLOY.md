@@ -33,27 +33,26 @@ open http://localhost:8080
 ## Deployment auf AWS — Architektur
 
 ```
-Browser ──HTTPS──→ CloudFront
+Browser ──HTTP──→ EC2 Nginx:80
                       │
-                      ├── /*       → S3 Static Website (Custom Origin)
+                      ├── /        → reverse proxy → S3 Static Website (Frontend)
                       │
-                      └── /acm/*   → EC2 Nginx:80 → proxy → localhost:3000
-                                                              │
-                                                              └── RDS PostgreSQL
+                      └── /acm/*   → proxy → localhost:3000 (Rust/Axum Backend)
+                                                  │
+                                                  └── RDS PostgreSQL
 ```
 
-- **Frontend:** React SPA → gebaut mit Vite → gehostet auf **S3 Static Website** → ausgeliefert via **CloudFront** (HTTPS)
-- **Backend:** Rust/Axum API auf **EC2** (Port 3000) hinter **Nginx Reverse-Proxy** (Port 80)
+- **Frontend:** React SPA → gebaut mit Vite → gehostet auf **S3 Static Website** → ausgeliefert via **Nginx Reverse-Proxy** auf EC2
+- **Backend:** Rust/Axum API auf **EC2** (Port 3000), ebenfalls hinter Nginx (Port 80)
 - **Datenbank:** PostgreSQL 17 via **AWS RDS** (nur intern erreichbar)
-- **CloudFront:** Einheitlicher HTTPS-Endpunkt, routet `/*` → S3 und `/acm/*` → EC2
-- **CORS:** Nicht mehr nötig – Frontend und Backend laufen unter derselben CloudFront-Domain
+- **Nginx:** Einheitlicher Entrypoint auf Port 80 → routet `/` → S3 und `/acm/*` → Backend
+- **CORS:** Nicht nötig – Frontend und Backend laufen unter derselben EC2-IP (same-origin)
 
 ### EC2 Public IP (dynamisch)
 
-Die EC2-Public-IP wechselt bei **Stop/Start**. Der CloudFront-Origin merkt sich die IP
-zum Zeitpunkt der Erstellung. **Lösung:**
+Die EC2-Public-IP wechselt bei **Stop/Start**. Lösung:
 - Nur **Reboot** verwenden (Reboot behält die IP)
-- Falls die IP doch wechselt: CloudFront-Origin updaten (2 Minuten in der Console)
+- Nach IP-Wechsel: nginx-Konfiguration muss nicht geändert werden, aber die URL zum Aufrufen ändert sich
 
 ---
 
@@ -83,7 +82,7 @@ Nach dem Erstellen die RDS-Endpoint-URL notieren (z. B. `database-acm.xxxxxxx.
 - **Typ:** t3.medium (2 vCPU, 4 GB RAM)
 - **Security Group:**
   - Port 22 (SSH) von deiner IP (`/32`)
-  - Port 80 (HTTP) von `0.0.0.0/0` (CloudFront greift auf Port 80 zu)
+  - Port 80 (HTTP) von `0.0.0.0/0` (Nginx als Frontend + API-Proxy)
   - Port 3000 nur für internen Zugriff (nginx → localhost)
 - **Storage:** 20 GB gp3
 
@@ -122,7 +121,9 @@ sudo nginx -t
 sudo systemctl enable --now nginx
 ```
 
-Der nginx lauscht auf Port 80 und leitet `/acm/*` an `http://127.0.0.1:3000` weiter.
+Der nginx lauscht auf Port 80 und leitet:
+- `/` → S3 Static Website (Frontend)
+- `/acm/*` → `http://127.0.0.1:3000` (Backend)
 
 #### Systemd-Service (Production)
 
@@ -173,7 +174,7 @@ sudo systemctl restart acm-backend
 
 ---
 
-### 4. S3 Static Website — Frontend
+### 3. S3 Static Website — Frontend
 
 #### Bucket erstellen
 
@@ -206,9 +207,9 @@ sudo systemctl restart acm-backend
 
 #### Frontend lokal bauen & deployen
 
-**`Frontend/.env`**: `VITE_API_URL` leer lassen oder auskommentieren →
+**`Frontend/.env`**: `VITE_API_URL` leer lassen →
 der Frontend-Code verwendet den relativen Pfad `/acm/...`.
-CloudFront routet `/acm/*` automatisch zum Backend.
+Nginx auf der EC2 proxyt `/acm/*` automatisch zum Backend.
 
 ```bash
 cd Frontend
@@ -219,65 +220,16 @@ aws s3 sync dist/ s3://acm-fe-bucket/ --delete --acl public-read
 
 ---
 
-### 5. CloudFront Distribution
+### 4. App im Browser öffnen
 
-Eine CloudFront-Distribution bündelt S3 (Frontend) und EC2 (Backend)
-unter einer gemeinsamen HTTPS-Domain.
+`http://<EC2-PUBLIC-IP>` → Nginx serviert das Frontend aus S3.
+API-Calls gehen als **same-origin** über Nginx → localhost:3000.
 
-#### Distribution erstellen
-
-**AWS Console → CloudFront → Distribution erstellen**
-
-**Origin 1 — S3 (Frontend):**
-| Einstellung | Wert |
-|---|---|
-| Origin Domain | `acm-fe-bucket.s3-website-eu-west-1.amazonaws.com` |
-| Protocol | HTTP only (S3 Static Website spricht nur HTTP) |
-| Origin Path | leer lassen |
-
-> **Hinweis:** Wir verwenden den **S3 Website-Endpoint** (nicht den REST-Endpoint),
-> weil Static Website Hosting aktiviert ist. Dementsprechend wird der Origin als
-> **Custom Origin** konfiguriert, nicht als S3 Origin.
-
-**Origin 2 — EC2 (Backend):**
-| Einstellung | Wert |
-|---|---|
-| Origin Domain | `<EC2-PUBLIC-IP>` (z.B. `18.192.100.50`) |
-| Protocol | HTTP only |
-| Origin Path | leer lassen |
-
-**Default Behavior (`*` → S3):**
-| Einstellung | Wert |
-|---|---|
-| Origin | S3-Origin |
-| Viewer Protocol Policy | **Redirect HTTP → HTTPS** |
-| Allowed HTTP Methods | GET, HEAD, OPTIONS |
-| Cache Policy | `CachingOptimized` (empfohlen) |
-
-**Behavior (`/acm*` → EC2):**
-| Einstellung | Wert |
-|---|---|
-| Origin | EC2-Origin |
-| Viewer Protocol Policy | **Redirect HTTP → HTTPS** |
-| Allowed HTTP Methods | GET, HEAD, OPTIONS, PUT, POST, DELETE |
-| Cache Policy | **`CachingDisabled`** (API-Responses nicht cachen) |
-| Query Strings | **Forward all, cache based on all** |
-| Headers | **Forward `Authorization`, `Content-Type`** |
-
-#### Nach dem Erstellen
-
-- **Distribution-Domain notieren:** `https://dxxxxxxxxxxxxx.cloudfront.net`
-- **Status abwarten:** Bis `Last Modified` nicht mehr `InProgress` zeigt
-  (ca. 5–10 Minuten)
-
-#### S3 im Browser öffnen
-
-`https://dxxxxxxxxxxxxx.cloudfront.net` → Frontend wird geladen.
-API-Calls gehen als **same-origin** über CloudFront → EC2.
+> **Hinweis:** Die S3-Website-URL (`http://acm-fe-bucket.s3-website-...`) wird nicht mehr direkt aufgerufen – alles läuft über die EC2-IP.
 
 ---
 
-### 6. Umgebungsvariablen
+### 5. Umgebungsvariablen
 
 #### Root-`/.env` (für Backend / systemd)
 
@@ -292,7 +244,7 @@ API-Calls gehen als **same-origin** über CloudFront → EC2.
 
 | Variable | Beschreibung | Beispiel |
 |---|---|---|
-| `VITE_API_URL` | leer lassen → relativer Pfad `/acm/...` (CloudFront routet) | *(nicht setzen)* |
+| `VITE_API_URL` | leer lassen → relativer Pfad `/acm/...` (Nginx proxyt) | *(nicht setzen)* |
 | `FRONTEND_PORT` | Vite-Dev-Server-Port | `8080` |
 | `API_PROXY_TARGET` | Vite-Proxy-Ziel (Dev) | `http://localhost:3000` |
 
@@ -301,7 +253,7 @@ API-Calls gehen als **same-origin** über CloudFront → EC2.
 
 ---
 
-### 7. Nützliche Befehle
+### 6. Nützliche Befehle
 
 ```bash
 # Backend-Logs live
@@ -315,11 +267,8 @@ sudo nginx -t
 sudo tail -f /var/log/nginx/access.log
 sudo tail -f /var/log/nginx/error.log
 
-# Backend direkt testen (bei IP-Wechsel neue IP nutzen)
-curl -s http://<EC2-PUBLIC-IP>/acm
-
-# CloudFront Invalidierung (bei Frontend-Update)
-aws cloudfront create-invalidation --distribution-id <DIST-ID> --paths "/*"
+# Backend direkt testen
+curl -s http://127.0.0.1:3000/acm
 ```
 
 ---
@@ -338,11 +287,9 @@ Die Session-Tokens werden im **Arbeitsspeicher** des Backends gehalten
 
 | Problem | Ursache | Lösung |
 |---|---|---|
-| CloudFront: 403 Access Denied | S3-Bucket-Policy fehlt oder falsch | Bucket-Policy mit `PublicReadGetObject` prüfen |
-| CloudFront: 502 Bad Gateway (EC2) | EC2 nicht erreichbar oder nginx läuft nicht | `sudo systemctl status nginx`, Public-IP prüfen (bei IP-Wechsel CloudFront-Origin updaten) |
-| 504 Gateway Timeout | Backend antwortet nicht | `sudo journalctl -u acm-backend -f` prüfen |
-| Fetch failed / Status (null) | CloudFront-Distribution noch im Deployment | Warten bis Status "Deployed" zeigt (5–10 Min) |
-| Frontend lädt, API-Calls schlagen fehl | CloudFront-Verhalten `/acm*` falsch konfiguriert | Behavior `/acm*` prüfen: Query Strings + Headers forwarden |
-| 403 favicon.svg / page refresh 404 | SPA-Routing fehlt | Error document in S3 Static Website auf `index.html` setzen |
-| EC2-IP geändert (Stop/Start) | Frontend lädt, API-Calls tot | CloudFront-Origin auf neue IP updaten |
+| 502 Bad Gateway | EC2-IP geändert (Stop/Start) | Neue IP im Browser eingeben – nginx läuft weiter |
+| Connection refused | Rust-Backend läuft nicht | `sudo journalctl -u acm-backend -f` prüfen |
+| Frontend lädt, API tot | Nginx `/acm/`-Proxy falsch | `sudo tail -f /var/log/nginx/error.log` |
+| 403 favicon.svg / blank page | SPA-Routing falsch | Error document in S3 auf `index.html` prüfen |
 | Backend-Neustart: alle ausgeloggt | In-Memory-Sessions | Neu einloggen – Daten bleiben erhalten |
+| Zen Browser CORS-Fehler | Alte S3-URL im Lesezeichen | `http://<EC2-IP>` direkt verwenden (same-origin) |
