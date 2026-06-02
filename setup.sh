@@ -70,7 +70,7 @@ if [ ! -f Frontend/.env ]; then
 # ─── ACM API Connection Monitor — Frontend ───
 # Wird von Vite zur Build-Zeit gelesen (import.meta.env).
 # In Production: VITE_API_URL leer lassen → CloudFront routet /acm/* zum Backend.
-# Elastic IP + CloudFront: IP-Wechsel ist kein Problem mehr.
+# CloudFront-Origin nutzt EC2-Public-IP. Nur Reboot (nie Stop/Start) – sonst Origin updaten.
 
 FRONTEND_PORT=${FRONTEND_PORT}
 

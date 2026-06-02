@@ -18,8 +18,8 @@ kanban-plugin: board
 - [x] Frontend: S3 Static Website (HTTP) + CloudFront (HTTPS)
 - [x] Backend: EC2 + Nginx Reverse-Proxy + systemd-Service (Port 3000)
 - [x] DB: RDS PostgreSQL
-- [x] Elastic IP (feste Adresse für CloudFront-Origin)
-- [ ] CloudFront: OAC-Konfiguration prüfen
+- [x] CloudFront + EC2-Public-IP (kein Elastic IP im Sandbox)
+- [ ] Bei IP-Wechsel: CloudFront-Origin updaten dokumentieren
 - [ ] Nach Migration: CORS-Konfiguration verschlanken (same-origin)
 
 ---

@@ -48,10 +48,12 @@ Browser ──HTTPS──→ CloudFront
 - **CloudFront:** Einheitlicher HTTPS-Endpunkt, routet `/*` → S3 und `/acm/*` → EC2
 - **CORS:** Nicht mehr nötig – Frontend und Backend laufen unter derselben CloudFront-Domain
 
-### Elastic IP
+### EC2 Public IP (dynamisch)
 
-Die EC2-Instanz braucht eine **Elastic IP** (feste öffentliche IP), damit der CloudFront-Origin
-stabil bleibt. Elastic IPs sind kostenlos, solange sie einer laufenden Instanz zugeordnet sind.
+Die EC2-Public-IP wechselt bei **Stop/Start**. Der CloudFront-Origin merkt sich die IP
+zum Zeitpunkt der Erstellung. **Lösung:**
+- Nur **Reboot** verwenden (Reboot behält die IP)
+- Falls die IP doch wechselt: CloudFront-Origin updaten (2 Minuten in der Console)
 
 ---
 
@@ -73,16 +75,7 @@ Nach dem Erstellen die RDS-Endpoint-URL notieren (z. B. `database-acm.xxxxxxx.
 
 ---
 
-### 2. Elastic IP
-
-1. **AWS Console → EC2 → Elastic IPs → Elastic IP-Adresse zuweisen**
-2. **Region:** `eu-west-1` (gleiche Region wie EC2)
-3. Die Elastic IP der EC2-Instanz zuordnen
-4. Die IP notieren (wird für CloudFront-Origin und nginx gebraucht)
-
----
-
-### 3. EC2 — Backend + Nginx
+### 2. EC2 — Backend + Nginx
 
 #### Instanz starten
 
@@ -172,7 +165,7 @@ sudo journalctl -u acm-backend -f   # Logs live verfolgen
 #### Backend neustarten (nach Code-Änderungen)
 
 ```bash
-ssh ec2-user@<ELASTIC-IP>
+ssh ec2-user@<EC2-PUBLIC-IP>
 cd ACM_API-Connection-Monitor && git pull
 cd Backend && cargo build --release
 sudo systemctl restart acm-backend
@@ -249,7 +242,7 @@ unter einer gemeinsamen HTTPS-Domain.
 **Origin 2 — EC2 (Backend):**
 | Einstellung | Wert |
 |---|---|
-| Origin Domain | `<ELASTIC-IP>` (z.B. `18.192.100.50`) |
+| Origin Domain | `<EC2-PUBLIC-IP>` (z.B. `18.192.100.50`) |
 | Protocol | HTTP only |
 | Origin Path | leer lassen |
 
@@ -322,8 +315,8 @@ sudo nginx -t
 sudo tail -f /var/log/nginx/access.log
 sudo tail -f /var/log/nginx/error.log
 
-# Elastic IP prüfen
-curl -s http://<ELASTIC-IP>/acm
+# Backend direkt testen (bei IP-Wechsel neue IP nutzen)
+curl -s http://<EC2-PUBLIC-IP>/acm
 
 # CloudFront Invalidierung (bei Frontend-Update)
 aws cloudfront create-invalidation --distribution-id <DIST-ID> --paths "/*"
@@ -346,9 +339,10 @@ Die Session-Tokens werden im **Arbeitsspeicher** des Backends gehalten
 | Problem | Ursache | Lösung |
 |---|---|---|
 | CloudFront: 403 Access Denied | S3-Bucket-Policy fehlt oder falsch | Bucket-Policy mit `PublicReadGetObject` prüfen |
-| CloudFront: 502 Bad Gateway (EC2) | EC2 nicht erreichbar oder nginx läuft nicht | Elastic IP prüfen, `sudo systemctl status nginx` |
+| CloudFront: 502 Bad Gateway (EC2) | EC2 nicht erreichbar oder nginx läuft nicht | `sudo systemctl status nginx`, Public-IP prüfen (bei IP-Wechsel CloudFront-Origin updaten) |
 | 504 Gateway Timeout | Backend antwortet nicht | `sudo journalctl -u acm-backend -f` prüfen |
 | Fetch failed / Status (null) | CloudFront-Distribution noch im Deployment | Warten bis Status "Deployed" zeigt (5–10 Min) |
 | Frontend lädt, API-Calls schlagen fehl | CloudFront-Verhalten `/acm*` falsch konfiguriert | Behavior `/acm*` prüfen: Query Strings + Headers forwarden |
 | 403 favicon.svg / page refresh 404 | SPA-Routing fehlt | Error document in S3 Static Website auf `index.html` setzen |
+| EC2-IP geändert (Stop/Start) | Frontend lädt, API-Calls tot | CloudFront-Origin auf neue IP updaten |
 | Backend-Neustart: alle ausgeloggt | In-Memory-Sessions | Neu einloggen – Daten bleiben erhalten |
