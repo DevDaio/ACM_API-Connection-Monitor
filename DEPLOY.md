@@ -56,6 +56,78 @@ Die EC2-Public-IP wechselt bei **Stop/Start**. Lösung:
 
 ---
 
+## HTTPS aufsetzen (optional)
+
+Aktuell läuft alles über **HTTP** (Port 80). Für HTTPS gibt es zwei Wege:
+
+### Variante A: Self-Signed Certificate (einfach)
+
+```bash
+# Self-Signed Cert erstellen
+sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout /etc/ssl/private/acm-selfsigned.key \
+  -out /etc/ssl/certs/acm-selfsigned.crt \
+  -subj "/CN=$(curl -s http://checkip.amazonaws.com)"
+
+# Nginx-Konfiguration: Port 443 + Redirect von 80
+sudo nano /etc/nginx/conf.d/acm-backend.conf
+```
+
+**`/etc/nginx/conf.d/acm-backend.conf`**:
+```nginx
+server {
+    listen 80;
+    server_name _;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name _;
+
+    ssl_certificate     /etc/ssl/certs/acm-selfsigned.crt;
+    ssl_certificate_key /etc/ssl/private/acm-selfsigned.key;
+
+    location / {
+        proxy_pass http://acm-fe-bucket.s3-website-eu-west-1.amazonaws.com;
+        proxy_set_header Host acm-fe-bucket.s3-website-eu-west-1.amazonaws.com;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    location /acm/ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+```
+
+```bash
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+**Browser zeigt einmal "Unsicher"** – einmalig "Trotzdem fortfahren" klicken.
+Bei IP-Wechsel muss das Zertifikat neu generiert werden.
+
+### Variante B: Domain + Let's Encrypt (empfohlen)
+
+Wenn du eine Domain (z.B. `acm-api.example.com`) hast, die auf die EC2-IP zeigt:
+
+```bash
+sudo dnf install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d acm-api.example.com
+# Automatische Verlängerung
+sudo certbot renew --dry-run
+```
+
+Dann läuft alles sauber über HTTPS ohne Browser-Warnung.
+
+---
+
 ### 1. RDS PostgreSQL einrichten
 
 Über AWS Console oder CLI eine RDS-PostgreSQL-Instanz erstellen:

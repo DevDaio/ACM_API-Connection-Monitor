@@ -20,11 +20,12 @@
                         ┌──────────────────────────────────────┐
                         │         Browser / Nutzer             │
                         │      http://<EC2-PUBLIC-IP>          │
+                        │   https:// (mit Self-Signed Cert)    │
                         └──────────────┬───────────────────────┘
-                                       │ HTTP
+                                       │ HTTP / HTTPS
                                        ▼
                         ┌──────────────────────────────────────┐
-                        │        EC2 Nginx (Port 80)           │
+                        │     EC2 Nginx (Port 80 / 443)        │
                         │         Reverse-Proxy                │
                         │                                      │
                         │  / → S3 (Frontend)                   │
@@ -271,6 +272,9 @@ Siehe [DEPLOY.md](DEPLOY.md) für AWS:
 - **Datenbank:** RDS PostgreSQL (nur intern)
 - **Nginx:** Einheitlicher Entrypoint auf Port 80 → routet `/` → S3 und `/acm/*` → Backend
 - **CORS:** Nicht mehr nötig — alles same-origin (eine EC2-IP)
+
+> **HTTPS?** Aktuell HTTP (Port 80). Für HTTPS: Self-Signed Cert mit OpenSSL oder
+> Let's Encrypt mit Domain – siehe [DEPLOY.md](DEPLOY.md#https-aufsetzen-optional).
 
 ## Entwickler
 

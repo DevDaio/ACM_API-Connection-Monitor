@@ -41,6 +41,9 @@ graph TB
 5. Rust-Backend verarbeitet die Anfrage (DB, Session, Monitoring)
 6. **Same-Origin** → kein CORS, kein Preflight, kein uBlock-Problem
 
+> **HTTPS?** Aktuell HTTP. Für HTTPS: Self-Signed Certificate via OpenSSL
+> (einfach, Browser-Warnung) oder Let's Encrypt mit eigener Domain.
+
 **Komponenten:**
 
 | Ebene | Technologie | Datei(en) |
