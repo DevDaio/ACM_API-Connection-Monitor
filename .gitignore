@@ -41,5 +41,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# === Persönliche Notizen / Erklärungen ===
+architektur-erklaerung.md
+
 # === Temp / Cache ===
 *.tmp
