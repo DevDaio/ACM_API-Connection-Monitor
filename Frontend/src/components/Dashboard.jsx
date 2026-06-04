@@ -6,7 +6,10 @@ import ThemeSwitcher from './ThemeSwitcher';
 
 function Dashboard({
   endpoints,
+  mainSwitch,
+  onToggleMainSwitch,
   onRemove,
+  onToggleEndpoint,
   onSetIntervall,
   onShowLog,
   onEditUrl,
@@ -54,6 +57,28 @@ function Dashboard({
       </header>
 
       <div className="flex-1 w-full px-8 py-6 relative z-10">
+        {/* ─── Main Switch ─── */}
+        <div className="flex items-center justify-between mb-6 border ac-bd bg-gray-900/50 px-6 py-4 relative"
+          style={{boxShadow: 'inset 0 0 20px rgba(234,88,12,0.05)'}}>
+          <div className="flex items-center gap-4">
+            <span className={`inline-block w-2 h-2 ${mainSwitch ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.8)]' : 'bg-gray-700'}`} />
+            <span className="text-sm font-mono ac-tx-hover tracking-widest uppercase font-bold">MAIN_SWITCH</span>
+            <span className="text-[10px] font-mono text-gray-300 tracking-wider">TOGGLE_ALL_JOBS</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={onToggleMainSwitch}
+              className={`relative w-14 h-1.5 transition-all rounded-full ${mainSwitch ? 'bg-orange-600 shadow-[0_0_10px_rgba(234,88,12,0.5)]' : 'bg-gray-800'}`}>
+              <span className={`absolute -top-[5px] w-3.5 h-3.5 rounded-full transition-all border-2 ${
+                mainSwitch
+                  ? 'right-0 bg-orange-500 border-orange-400 shadow-[0_0_8px_rgba(234,88,12,0.6)]'
+                  : 'left-0 bg-gray-600 border-gray-600'
+              }`} />
+            </button>
+            <span className={`text-[10px] font-mono tracking-wider ${
+              mainSwitch ? 'text-green-400' : 'text-gray-300'
+            }`}>{mainSwitch ? 'ARMED' : 'OFF'}</span>
+          </div>
+        </div>
         {/* ─── Endpunkt-Tabelle ─── */}
         <div className="border ac-bd relative"
           style={{boxShadow: 'inset 0 0 30px rgba(234,88,12,0.03)'}}>
@@ -87,6 +112,7 @@ function Dashboard({
                       key={ep.endpointid}
                       endpoint={ep}
                       onRemove={() => onRemove(i)}
+                      onToggle={() => onToggleEndpoint(i)}
                       onSetIntervall={() => onSetIntervall(i)}
                       onShowLog={() => onShowLog(i)}
                       onEditUrl={() => onEditUrl(i)}

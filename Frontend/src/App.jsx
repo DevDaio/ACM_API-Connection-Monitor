@@ -14,7 +14,7 @@ import './App.css';
 
 function App() {
   const {
-    user, endpoints,
+    user, endpoints, mainSwitch,
     showCreateAccount, setShowCreateAccount,
     showAddEndpoint, setShowAddEndpoint,
     showSetIntervall, setShowSetIntervall,
@@ -26,6 +26,7 @@ function App() {
     showEditUrl, setShowEditUrl,
     editUrlValue, setEditUrlValue,
     handleLogin, handleCreateAccount, handleLogout,
+    handleToggleMainSwitch, handleToggleEndpoint,
     handleAddEndpoint,
     handleSetIntervall, handleSetIntervallSubmit,
     handleRemove, confirmDelete,
@@ -45,7 +46,10 @@ function App() {
         <>
           <Dashboard
             endpoints={endpoints}
+            mainSwitch={mainSwitch}
+            onToggleMainSwitch={handleToggleMainSwitch}
             onRemove={handleRemove}
+            onToggleEndpoint={handleToggleEndpoint}
             onSetIntervall={handleSetIntervall}
             onShowLog={handleShowLog}
             onEditUrl={handleEditUrl}

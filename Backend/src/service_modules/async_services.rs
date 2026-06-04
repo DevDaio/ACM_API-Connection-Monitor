@@ -65,6 +65,7 @@ pub struct EndpointExtended {
     pub endpointid: i32,
     pub url: String,
     pub check_type: String,                      // "http", "tcp" oder "icmp"
+    pub active: bool,                            // Killswitch: true = wird überwacht
     pub status: Option<bool>,                   // letzter Status (NULL wenn noch nie gecheckt)
     pub statusdate: Option<NaiveDate>,          // Datum des letzten Status
     pub statustime: Option<NaiveTime>,          // Uhrzeit des letzten Status
@@ -82,7 +83,7 @@ pub struct EndpointExtended {
 //   - status_history: sammelt die letzten 30 Statuswerte in ein Array (für Sparkline-Chart)
 pub async fn get_user_endpoints(pool: &PgPool, userid: i32) -> Result<Vec<EndpointExtended>, sqlx::Error> {
     sqlx::query_as::<_, EndpointExtended>(
-        "SELECT e.endpointid, e.url, e.check_type, l.status, l.statusdate, l.statustime, \
+        "SELECT e.endpointid, e.url, e.check_type, e.active, l.status, l.statusdate, l.statustime, \
                 CASE WHEN l.statusdate IS NOT NULL THEN \
                   EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - ( \
                     SELECT COALESCE( \
@@ -312,6 +313,29 @@ pub async fn delete_endpoint(pool: &PgPool, endpointid: i32, userid: i32) -> Res
     Ok(rows)
 }
 
+// Setzt den active-Status eines Endpunkts (Killswitch).
+pub async fn toggle_endpoint(pool: &PgPool, endpointid: i32, userid: i32, active: bool) -> Result<PgQueryResult, sqlx::Error> {
+    let owned = sqlx::query_scalar::<_, i32>(
+        "SELECT 1 FROM userendpoint WHERE endpointid = $1 AND userid = $2"
+    )
+    .bind(endpointid)
+    .bind(userid)
+    .fetch_optional(pool)
+    .await?;
+    if owned.is_none() {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
+    let rows = sqlx::query(
+        "UPDATE endpoint SET active = $1 WHERE endpointid = $2"
+    )
+    .bind(active)
+    .bind(endpointid)
+    .execute(pool)
+    .await?;
+    Ok(rows)
+}
+
 // ════════════════════════════════════════════════════════════════
 //  Log-Funktionen
 // ════════════════════════════════════════════════════════════════
@@ -375,7 +399,8 @@ pub async fn get_endpoints_with_intervals(pool: &PgPool) -> Result<Vec<EndpointI
     sqlx::query_as::<_, EndpointInterval>(
         "SELECT i.endpointid, i.seconds, e.url, e.check_type \
          FROM intervall i \
-         JOIN endpoint e ON e.endpointid = i.endpointid"
+         JOIN endpoint e ON e.endpointid = i.endpointid \
+         WHERE e.active = true"
     )
     .fetch_all(pool)
     .await

@@ -9,6 +9,7 @@ export function useAppState() {
   });
 
   const [endpoints, setEndpoints] = useState([]);
+  const [mainSwitch, setMainSwitch] = useState(true);
 
   const [showCreateAccount, setShowCreateAccount] = useState(false);
   const [showAddEndpoint, setShowAddEndpoint] = useState(false);
@@ -53,7 +54,10 @@ export function useAppState() {
     if (!user) return;
     try {
       const d = await api.getHome();
-      setEndpoints(mapEndpoints(d));
+      const mapped = mapEndpoints(d);
+      setEndpoints(mapped);
+      if (mapped.every(ep => ep.active)) setMainSwitch(true);
+      else if (mapped.every(ep => !ep.active)) setMainSwitch(false);
     } catch (e) {
       console.error('refreshEndpoints failed', e);
       handleAuthError();
@@ -109,6 +113,27 @@ export function useAppState() {
     setUser(null);
     setEndpoints([]);
   }, []);
+
+  const handleToggleMainSwitch = useCallback(async () => {
+    setMainSwitch(s => {
+      const next = !s;
+      setEndpoints(prev => {
+        Promise.all(prev.map(ep => api.toggleEndpoint(ep.endpointid, next)))
+          .then(() => refreshEndpoints())
+          .catch(console.error);
+        return prev.map(ep => ({ ...ep, active: next }));
+      });
+      return next;
+    });
+  }, [refreshEndpoints]);
+
+  const handleToggleEndpoint = useCallback(async (i) => {
+    const ep = endpoints[i];
+    if (!ep) return;
+    const nextActive = !ep.active;
+    await api.toggleEndpoint(ep.endpointid, nextActive);
+    await refreshEndpoints();
+  }, [endpoints, refreshEndpoints]);
 
   const handleAddEndpoint = useCallback(async (rawUrl, seconds, checkType = 'http') => {
     const url = checkType !== 'http' ? rawUrl.trim() : normalizeUrl(rawUrl);
@@ -198,7 +223,7 @@ export function useAppState() {
   }, [showLog, selectedEndpoint, fetchLog]);
 
   return {
-    user, endpoints,
+    user, endpoints, mainSwitch,
     showCreateAccount, setShowCreateAccount,
     showAddEndpoint, setShowAddEndpoint,
     showSetIntervall, setShowSetIntervall,
@@ -210,6 +235,7 @@ export function useAppState() {
     showEditUrl, setShowEditUrl,
     editUrlValue, setEditUrlValue,
     handleLogin, handleCreateAccount, handleLogout,
+    handleToggleMainSwitch, handleToggleEndpoint,
     handleAddEndpoint,
     handleSetIntervall, handleSetIntervallSubmit,
     handleRemove, confirmDelete,

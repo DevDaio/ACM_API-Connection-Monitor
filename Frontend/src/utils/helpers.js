@@ -40,6 +40,7 @@ export function mapEndpoints(data) {
   return data.map(ep => ({
     endpointid: ep.endpointid,
     url: ep.url,
+    active: ep.active,
     checkType: ep.check_type || 'http',
     status: ep.status === null ? 'Unknown' : (ep.status ? 'Running' : 'Down'),
     durationSeconds: ep.duration_seconds ?? 0,
