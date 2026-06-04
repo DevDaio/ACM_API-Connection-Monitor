@@ -284,7 +284,7 @@ flowchart TD
     BUILD --> SCHLEIFE
 
     subgraph SCHLEIFE ["Hauptschleife (alle 1 Sekunde)"]
-        ABFR["SELECT i.endpointid, i.seconds, e.url, e.check_type<br/>FROM intervall i JOIN endpoint e"]
+        ABFR["SELECT i.endpointid, i.seconds, e.url, e.check_type<br/>FROM intervall i JOIN endpoint e<br/>WHERE e.active = true"]
         ABFR --> FEHLER{"DB-Fehler?"}
         FEHLER -->|"Ja"| FEHLER_LOG["eprintln + 10s schlafen"]
         FEHLER_LOG --> SCHLAF
@@ -331,6 +331,7 @@ flowchart TD
 | SSL | Selbst-signierte Zertifikate erlaubt (`danger_accept_invalid_certs(true)`) |
 | Log-Format | `endpointid, status (bool/NULL), url, statusdate DATE, statustime TIME` |
 | Zustands-Verfolgung | `HashMap<i32, Instant>` im Speicher (keine DB) |
+| Killswitch | `e.active = false` → Endpunkt wird vom Monitor übersprungen |
 | Fehler-Behandlung | DB-Fehler → 10s Pause, Log-Fehler → eprintln + continue |
 
 ---
