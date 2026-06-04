@@ -57,6 +57,8 @@ async fn main() -> Result<(), sqlx::Error> {
     sqlx::query("ALTER TABLE endpoint ADD COLUMN IF NOT EXISTS check_type VARCHAR(10) NOT NULL DEFAULT 'http'").execute(&pool).await?;
     // Migration (nur für bestehende DBs): check_type in Log-Tabelle
     sqlx::query("ALTER TABLE log ADD COLUMN IF NOT EXISTS check_type VARCHAR(10)").execute(&pool).await?;
+    // Migration: active-Spalte für Killswitch (jeder Endpoint kann ein/ausgeschaltet werden)
+    sqlx::query("ALTER TABLE endpoint ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT true").execute(&pool).await?;
     println!("Tables ready");
 
     // ─── Hintergrund-Monitoring-Loop starten ───
@@ -98,6 +100,7 @@ async fn main() -> Result<(), sqlx::Error> {
         .route("/acm/setIntervall", put(handlers::handle_set_intervall))
         .route("/acm/deleteConfirm", put(handlers::handle_delete_endpoint))
         .route("/acm/updateEndpoint", put(handlers::handle_update_endpoint))
+        .route("/acm/toggleEndpoint", put(handlers::handle_toggle_endpoint))
         .route("/acm/log", get(handlers::handle_log))
         .layer(cors)
         .with_state(state);

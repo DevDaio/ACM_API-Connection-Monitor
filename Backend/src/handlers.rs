@@ -13,7 +13,7 @@ use crate::service_modules::async_services;
 use crate::types::{
     AddEndpointReq, AppState, ChangeEmailReq, ChangePasswordReq,
     CreateAccountReq, DeleteEndpointReq, ErrorRes,
-    IdParam, LoginReq, LoginRes, SetIntervallReq, UpdateEndpointReq,
+    IdParam, LoginReq, LoginRes, SetIntervallReq, ToggleEndpointReq, UpdateEndpointReq,
 };
 
 // ─── Hilfsfunktion: userid aus Session-Token extrahieren ───
@@ -423,6 +423,25 @@ pub async fn handle_update_endpoint(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorRes { error: e.to_string() }),
             )
+        })?;
+    Ok(Json(serde_json::json!({ "status": "ok" })))
+}
+
+// PUT /acm/toggleEndpoint – Killswitch für einen Endpoint setzen (nur eigener)
+pub async fn handle_toggle_endpoint(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(body): Json<ToggleEndpointReq>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorRes>)> {
+    let userid = get_userid_from_token(&headers, &state)?;
+    async_services::toggle_endpoint(&state.pool, body.endpointid, userid, body.active)
+        .await
+        .map_err(|e| {
+            if matches!(e, sqlx::Error::RowNotFound) {
+                (StatusCode::FORBIDDEN, Json(ErrorRes { error: "Access denied".to_string() }))
+            } else {
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorRes { error: e.to_string() }))
+            }
         })?;
     Ok(Json(serde_json::json!({ "status": "ok" })))
 }

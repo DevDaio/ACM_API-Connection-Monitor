@@ -9,10 +9,12 @@ CREATE TABLE IF NOT EXISTS "user" (
 -- ─── Endpoint-Tabelle ───
 -- Speichert die zu überwachenden URLs/IPs.
 -- check_type: "http" = HTTP-GET, "tcp" = TCP-Port-Check, "icmp" = ICMP-Ping
+-- active: Killswitch (true = wird überwacht, false = pausiert)
 CREATE TABLE IF NOT EXISTS endpoint (
     endpointid INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     url VARCHAR(300) NOT NULL,
-    check_type VARCHAR(10) NOT NULL DEFAULT 'http'
+    check_type VARCHAR(10) NOT NULL DEFAULT 'http',
+    active BOOLEAN NOT NULL DEFAULT true
 );
 
 -- ─── User-Endpoint-Verknuepfung ───

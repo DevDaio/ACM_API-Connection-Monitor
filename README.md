@@ -7,8 +7,9 @@
 - **User-Accounts** — Registrierung + Login mit Passwort-Hashing (bcrypt)
 - **Session-Auth** — UUID-Token nach Login, geschützte Routen via `Authorization: Bearer`
 - **Endpoint-Verwaltung** — Endpunkte hinzufügen, bearbeiten, löschen
+- **Killswitch** — Jeder Endpunkt einzeln oder alle gleichzeitig ein-/ausschalten (pausiert Monitoring)
 - **Prüfintervalle** — Individuell pro Endpunkt (Sekunden/Minuten/Stunden)
-- **Automatisches Monitoring** — Hintergrund-Task pingt alle Endpunkte im definierten Intervall
+- **Automatisches Monitoring** — Hintergrund-Task pingt alle aktiven Endpunkte im definierten Intervall
 - **Live-Status** — Tabellarische Übersicht mit Status-LED, Uptime-Dauer, Sparkline-Chart
 - **Detaillierte Logs** — Gefiltert nach Status (Up/Down) und Datum
 - **Themes** — Farbschema umschaltbar (Lava Red / Hacker Green / Void Purple)
@@ -115,6 +116,7 @@ open http://localhost:8080
 | `DELETE` | `/acm/user/deleteAccount` | ✅ Token | Account löschen |
 | `PUT` | `/acm/addEndpoint` | ✅ Token | Neuen Endpoint hinzufügen (Body: `url`, `check_type`=http\|tcp\|icmp) |
 | `PUT` | `/acm/updateEndpoint` | ✅ Token | Endpoint-URL ändern (Body: `endpointid`, `url`, `check_type` optional) |
+| `PUT` | `/acm/toggleEndpoint` | ✅ Token | Killswitch (Body: `endpointid`, `active`=true\|false) |
 | `PUT` | `/acm/setIntervall` | ✅ Token | Prüfintervall setzen |
 | `PUT` | `/acm/deleteConfirm` | ✅ Token | Endpoint löschen |
 | `GET` | `/acm/log?id=N` | ✅ Token | Log eines Endpoints |
@@ -126,7 +128,7 @@ open http://localhost:8080
 
 ```
 user (userid, emailadress, password)
-endpoint (endpointid, url, check_type)      # check_type = "http" | "tcp" | "icmp"
+endpoint (endpointid, url, check_type, active)  # active = Killswitch (default true)
 userendpoint (userid, endpointid)           # M:N-Verknüpfung
 intervall (endpointid, seconds)             # Prüfintervall pro Endpoint
 log (endpointid, status, statusdate, statustime, url, check_type)  # status/url/check_type nullable
@@ -219,6 +221,7 @@ log (endpointid, status, statusdate, statustime, url, check_type)  # status/url/
 | `PUT` | `/acm/addEndpoint` | ✅ | `handle_add_endpoint()` | `api.addEndpoint()` |
 | `PUT` | `/acm/updateEndpoint` | ✅ | `handle_update_endpoint()` | `api.updateEndpoint()` |
 | `PUT` | `/acm/setIntervall` | ✅ | `handle_set_intervall()` | `api.setIntervall()` |
+| `PUT` | `/acm/toggleEndpoint` | ✅ | `handle_toggle_endpoint()` | `api.toggleEndpoint()` |
 | `PUT` | `/acm/deleteConfirm` | ✅ | `handle_delete_endpoint()` | `api.deleteEndpoint()` |
 | `GET` | `/acm/log?id=N` | ✅ | `handle_log()` | `api.getLog()` |
 
@@ -227,7 +230,7 @@ log (endpointid, status, statusdate, statustime, url, check_type)  # status/url/
 | Tabelle | CREATE (main.rs) | Wichtige Queries (async_services.rs) |
 |---|---|---|
 | `"user"` | `main.rs:46` | `create_account()` · `get_user_by_email()` · `get_user_by_id()` · `change_password()` · `change_email()` · `delete_account()` |
-| `endpoint` | `main.rs:47` (+ Migration `main.rs:56`) | `add_endpoint()` · `update_endpoint()` · `delete_endpoint()` · `get_user_endpoints()` (JOIN) |
+| `endpoint` | `main.rs:47` (+ Migration `main.rs:59`) | `add_endpoint()` · `update_endpoint()` · `toggle_endpoint()` · `delete_endpoint()` · `get_user_endpoints()` (JOIN) |
 | `userendpoint` | `main.rs:48` | `add_endpoint()` · `delete_endpoint()` |
 | `intervall` | `main.rs:49` | `set_intervall()` · `get_endpoints_with_intervals()` |
 | `log` | `main.rs:50` (+ Migration `main.rs:58`) | `insert_log()` · `get_log()` |

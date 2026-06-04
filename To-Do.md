@@ -9,6 +9,7 @@ kanban-plugin: board
 - [x] Authentifizierung von Front zu Backend (Session-Token via Authorization-Header)
 - [x] CORS: `allow_headers(Any)` → explizite Liste `[AUTHORIZATION, CONTENT_TYPE, ACCEPT]` (Browser ignoriert `*`)
 - [x] CORS-Konfiguration obsolet (same-origin via Nginx-Reverse-Proxy)
+- [x] Killswitch pro Endpunkt + MAIN_SWITCH (Frontend + Backend + DB)
 - [ ] Fehlerhandling einbauen (HTTP-Status-Codes, DB-Connection-Graceful-Shutdown, Input-Validierung)
 
 ---

@@ -85,4 +85,7 @@ export const api = {
 
   updateEndpoint: (endpointid, url, checkType) =>
     request('PUT', '/updateEndpoint', { endpointid, url, check_type: checkType || null }),
+
+  toggleEndpoint: (endpointid, active) =>
+    request('PUT', '/toggleEndpoint', { endpointid, active }),
 };

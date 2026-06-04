@@ -70,6 +70,12 @@ pub struct UpdateEndpointReq {
     pub check_type: Option<String>, // None = nicht ändern
 }
 
+#[derive(Deserialize)]
+pub struct ToggleEndpointReq {
+    pub endpointid: i32,
+    pub active: bool,
+}
+
 // Query-Parameter für GET-Requests (z. B. /acm/log?id=5)
 #[derive(Deserialize)]
 pub struct IdParam {

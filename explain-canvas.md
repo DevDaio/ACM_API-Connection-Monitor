@@ -1,6 +1,6 @@
 # ACM API Connection Monitor — Große Leinwand
 
-> Vollständige Codebasis-Visualisierung. 13 Routen · 5 DB-Tabellen · React+Axum+Rust · Echtzeit-Monitoring.
+> Vollständige Codebasis-Visualisierung. 14 Routen · 5 DB-Tabellen · React+Axum+Rust · Echtzeit-Monitoring.
 
 ---
 
@@ -57,7 +57,7 @@ graph TB
 
 ---
 
-## 2. Vollständige Routenkarte — Alle 13 Routen mit Authentifizierungstoren
+## 2. Vollständige Routenkarte — Alle 14 Routen mit Authentifizierungstoren
 
 ```mermaid
 flowchart LR
@@ -67,13 +67,14 @@ flowchart LR
         CA("POST /acm/createAccount"):::pub -->|"E-Mail + Passwort → bcrypt hashen"| CAO["200: {Nutzer-ID, E-Mail, Token}"]
     end
 
-    subgraph GESCHUETZT["Geschützt (Bearer-Token nötig) — 6 Routen"]
+    subgraph GESCHUETZT["Geschützt (Bearer-Token nötig) — 7 Routen"]
         H("GET /acm/home"):::ges -->|"Token → Nutzer-ID → JOIN-Abfrage"| HO["Liste &lt;EndpointExtended&gt;"]
         U("GET /acm/user"):::ges -->|"Token → Nutzer-ID"| UO["Nutzer"]
         CP("PUT /acm/user/changePassword"):::ges -->|"Token + altes PW + neues PW"| CPO["{status: ok}"]
         CE("PUT /acm/user/changeEmail"):::ges -->|"Token + neue E-Mail"| CEO["{status: ok}"]
         DA("DELETE /acm/user/deleteAccount"):::ges -->|"Token"| DAO["{status: ok}"]
         AE("PUT /acm/addEndpoint"):::ges -->|"Token + URL"| AEO["{endpointid}"]
+        TE("PUT /acm/toggleEndpoint"):::ges -->|"Token + endpointid + active"| TEO["{status: ok}"]
     end
 
     subgraph UNGESCHUETZT["Ungeschützt (kein Token, Body-Parameter) — 4 Routen"]
@@ -283,7 +284,7 @@ flowchart TD
     BUILD --> SCHLEIFE
 
     subgraph SCHLEIFE ["Hauptschleife (alle 1 Sekunde)"]
-        ABFR["SELECT i.endpointid, i.seconds, e.url, e.check_type<br/>FROM intervall i JOIN endpoint e"]
+        ABFR["SELECT i.endpointid, i.seconds, e.url, e.check_type<br/>FROM intervall i JOIN endpoint e<br/>WHERE e.active = true"]
         ABFR --> FEHLER{"DB-Fehler?"}
         FEHLER -->|"Ja"| FEHLER_LOG["eprintln + 10s schlafen"]
         FEHLER_LOG --> SCHLAF
@@ -330,6 +331,7 @@ flowchart TD
 | SSL | Selbst-signierte Zertifikate erlaubt (`danger_accept_invalid_certs(true)`) |
 | Log-Format | `endpointid, status (bool/NULL), url, statusdate DATE, statustime TIME` |
 | Zustands-Verfolgung | `HashMap<i32, Instant>` im Speicher (keine DB) |
+| Killswitch | `e.active = false` → Endpunkt wird vom Monitor übersprungen |
 | Fehler-Behandlung | DB-Fehler → 10s Pause, Log-Fehler → eprintln + continue |
 
 ---
@@ -348,6 +350,7 @@ classDiagram
         +INTEGER endpointid PK
         +VARCHAR(300) url
         +VARCHAR(10) check_type
+        +BOOLEAN active
     }
 
     class BenutzerEndpunkt {
@@ -385,11 +388,12 @@ CREATE TABLE IF NOT EXISTS "user" (
     password    VARCHAR(100) NOT NULL
 );
 
--- 2. Endpunkt (check_type: http | tcp | icmp)
+-- 2. Endpunkt (check_type: http | tcp | icmp, active: Killswitch)
 CREATE TABLE IF NOT EXISTS endpoint (
     endpointid  INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     url         VARCHAR(300) NOT NULL,
-    check_type  VARCHAR(10) NOT NULL DEFAULT 'http'
+    check_type  VARCHAR(10) NOT NULL DEFAULT 'http',
+    active      BOOLEAN NOT NULL DEFAULT true
 );
 
 -- 3. Benutzer-Endpunkt (n:m Junction-Tabelle)
@@ -425,12 +429,13 @@ ALTER TABLE log ADD COLUMN IF NOT EXISTS url VARCHAR(300);
 ALTER TABLE log ALTER COLUMN status DROP NOT NULL;
 ALTER TABLE endpoint ADD COLUMN IF NOT EXISTS check_type VARCHAR(10) NOT NULL DEFAULT 'http';
 ALTER TABLE log ADD COLUMN IF NOT EXISTS check_type VARCHAR(10);
+ALTER TABLE endpoint ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT true;
 ```
 
 **Komplexe Dashboard-Abfrage** (in `get_user_endpoints`, async_services.rs:80-114):
 
 ```sql
-SELECT e.endpointid, e.url, e.check_type,
+SELECT e.endpointid, e.url, e.check_type, e.active,
        l.status, l.statusdate, l.statustime,
        -- Dauer seit letztem Statuswechsel in Sekunden
        CASE WHEN l.statusdate IS NOT NULL THEN
@@ -581,7 +586,7 @@ flowchart TD
     TABELLEN_ANLEG --> UEBERWACH_START["tokio::spawn(async move {<br/>run_monitoring_loop(pool).await<br/>})"]
     UEBERWACH_START --> ZUSTAND_BAU["Arc::new(AppState {<br/>pool,<br/>sessions: RwLock::new(HashMap::new())<br/>})"]
     ZUSTAND_BAU -->     CORS["CorsLayer::new() (optional)<br/>→ same-origin via Nginx<br/>→ CORS nicht mehr zwingend nötig"]
-    CORS --> ROUTEN["Router::new()<br/>.route('/acm', ...) × 13<br/>.layer(cors)<br/>.with_state(zustand)"]
+    CORS --> ROUTEN["Router::new()<br/>.route('/acm', ...) × 14<br/>.layer(cors)<br/>.with_state(zustand)"]
     ROUTEN --> BINDEN["BACKEND_HOST / BACKEND_PORT<br/>→ Production: 127.0.0.1:3000 (nur localhost)"]
     BINDEN --> BEDIEN["axum::serve(listener, app).await"]
 
@@ -625,7 +630,7 @@ ACM_API-Connection-Monitor/
 ├── Backend/
 │   └── src/
 │       ├── main.rs                     # Server-Start, CORS, Routen, DB-Init, Überwachungs-Spawn
-│       ├── handlers.rs                 # 13 Axum-Handler (öffentlich + geschützt)
+│       ├── handlers.rs                 # 14 Axum-Handler (öffentlich + geschützt)
 │       ├── types.rs                    # AppState, Request/Response-Structs
 │       └── service_modules/
 │           ├── mod.rs                  # Modul-Deklaration
@@ -635,7 +640,7 @@ ACM_API-Connection-Monitor/
 │       ├── App.jsx                     # Wurzel-Komponente, Bedingtes Rendering
 │       ├── App.css                      # Tailwind-Import + Global-Styles
 │       ├── main.jsx                     # Einstiegspunkt (ReactDOM.createRoot)
-│       ├── api.js                      # HTTP-Client, Token-Verwaltung, 12 API-Funktionen
+│       ├── api.js                      # HTTP-Client, Token-Verwaltung, 13 API-Funktionen
 │       ├── ThemeContext.jsx             # Theme-Provider (lava/green/purple)
 │       ├── hooks/
 │       │   └── useAppState.js           # Zentraler Zustand + alle Callback-Handler
