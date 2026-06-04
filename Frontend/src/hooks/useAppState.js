@@ -114,26 +114,29 @@ export function useAppState() {
     setEndpoints([]);
   }, []);
 
-  const handleToggleMainSwitch = useCallback(async () => {
+  const handleToggleMainSwitch = useCallback(() => {
     setMainSwitch(s => {
       const next = !s;
       setEndpoints(prev => {
-        Promise.all(prev.map(ep => api.toggleEndpoint(ep.endpointid, next)))
-          .then(() => refreshEndpoints())
-          .catch(console.error);
+        prev.forEach(ep => api.toggleEndpoint(ep.endpointid, next).catch(console.error));
         return prev.map(ep => ({ ...ep, active: next }));
       });
       return next;
     });
-  }, [refreshEndpoints]);
+  }, []);
 
-  const handleToggleEndpoint = useCallback(async (i) => {
+  const handleToggleEndpoint = useCallback((i) => {
     const ep = endpoints[i];
     if (!ep) return;
     const nextActive = !ep.active;
-    await api.toggleEndpoint(ep.endpointid, nextActive);
-    await refreshEndpoints();
-  }, [endpoints, refreshEndpoints]);
+    setEndpoints(prev => {
+      const next = prev.map((e, j) => j === i ? { ...e, active: nextActive } : e);
+      if (next.every(e => e.active)) setMainSwitch(true);
+      else if (next.every(e => !e.active)) setMainSwitch(false);
+      return next;
+    });
+    api.toggleEndpoint(ep.endpointid, nextActive).catch(console.error);
+  }, [endpoints]);
 
   const handleAddEndpoint = useCallback(async (rawUrl, seconds, checkType = 'http') => {
     const url = checkType !== 'http' ? rawUrl.trim() : normalizeUrl(rawUrl);

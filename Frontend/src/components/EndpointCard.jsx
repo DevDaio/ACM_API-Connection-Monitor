@@ -2,26 +2,29 @@ import Sparkline from './Sparkline';
 import { fmtDuration } from '../utils/helpers';
 
 function EndpointCard({ endpoint, onRemove, onToggle, onSetIntervall, onShowLog, onEditUrl }) {
-  // Status-Bestimmung
+  const isOff = !endpoint.active;
   const isRunning = endpoint.status === 'Running';
   const isDown = endpoint.status === 'Down';
-  // LED-Farbe: gruen (Running) / rot (Down) / grau (Unknown)
-  const ledColor = isRunning
+  const ledColor = isOff
+    ? 'bg-gray-700'
+    : isRunning
     ? 'bg-green-500 shadow-[0_0_12px_rgba(34,197,94,0.8)]'
     : isDown
     ? 'bg-red-500 shadow-[0_0_12px_rgba(239,68,68,0.8)]'
     : 'bg-gray-700';
+  const statusText = isOff ? 'OFF' : endpoint.status.toUpperCase();
+  const statusColor = isOff
+    ? 'text-gray-500'
+    : isRunning ? 'text-green-400' : isDown ? 'text-red-400' : 'text-gray-300';
+  const rowOpacity = isOff ? 'opacity-50' : '';
 
   return (
-    // Doppelklick öffnet Log-Modal
-    <tr className="border-b ac-bd hover:bg-orange-950/[0.08] transition-colors cursor-pointer" onDoubleClick={onShowLog}>
+    <tr className={`border-b ac-bd hover:bg-orange-950/[0.08] transition-colors cursor-pointer ${rowOpacity}`} onDoubleClick={onShowLog}>
       {/* ─── Status-LED + Text ─── */}
       <td className="py-3.5 px-4">
         <div className="flex items-center gap-3">
           <span className={`inline-block w-3 h-3 shrink-0 ${ledColor}`} />
-          <span className={`text-xs font-mono font-bold tracking-wider ${
-            isRunning ? 'text-green-400' : isDown ? 'text-red-400' : 'text-gray-300'
-          }`}>{endpoint.status.toUpperCase()}</span>
+          <span className={`text-xs font-mono font-bold tracking-wider ${statusColor}`}>{statusText}</span>
         </div>
       </td>
       {/* ─── URL + EDIT-Button ─── */}
@@ -43,7 +46,7 @@ function EndpointCard({ endpoint, onRemove, onToggle, onSetIntervall, onShowLog,
       <td className="py-3.5 px-4 text-sm text-gray-300 font-mono">{endpoint.interval}</td>
       {/* ─── Sparkline-Chart ─── */}
       <td className="py-3.5 px-4">
-        <Sparkline data={endpoint.sparkHistory} />
+        <Sparkline data={endpoint.sparkHistory} active={endpoint.active} />
       </td>
       {/* ─── Letzte Aenderung (Datum + Uhrzeit) ─── */}
       <td className="py-3.5 px-4 text-xs text-gray-300 font-mono whitespace-nowrap">{endpoint.changedate}<br />{endpoint.changetime}</td>
